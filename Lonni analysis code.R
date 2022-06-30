@@ -1,4 +1,6 @@
+################################
 ##### THESIS ANALYSIS LONNI#####
+################################
 #This script is for the analysis of asymmetry in colour perception, 
 #Reused code from "Sonia analysis code (Beth pilot)
 
@@ -33,17 +35,30 @@ library(matrixStats) %>% shhh
 library(plotrix) %>% shhh
 library(JWileymisc)}
 
-setwd("~/thesis/datanalysis")
-
+setwd("~/thesis/colas_analysis")
 #READ FILES 
 {
+## Pilot data with Ishihara
+#make a list of data file names
+pilot.files <- list.files(path="./data/Pilot data", pattern="*.csv", full.names=TRUE)
+#make a dataframe binding all datafiles
+pilot.data <- sapply(pilot.files, read.csv, simplify=FALSE) %>% bind_rows(.id = "fileId")
+#adding Ishihara colomn missing to allow rbind
+pilot.data$Ishi_textbox.text <- NA
+
+##Data with Ishihara test 
 #make a list of data file names
 files <- list.files(path="./data", pattern="*.csv", full.names=TRUE)
-#files
-
 #make a dataframe binding all datafiles
-data <- sapply(files, read.csv, simplify=FALSE) %>% bind_rows(.id = "fileId")
+data <- sapply(files, read.csv, simplify=FALSE) %>%
+  lapply(\(x) mutate(x, across(Ishi_textbox.text, as.character))) %>% bind_rows(.id = "fileId") 
+
+data <- bind_rows(pilot.data, data)
 }
+
+###################
+###DATA CLEANING###
+###################
 
 #MAKE CATCHDATA DATAFRAME WITH ONE ROW PER CATCH TRIAL, FOR ALL PARTICIPANTS
 {
@@ -59,7 +74,6 @@ catchdata <- catchdata %>% drop_na()
 #format response time
 catchdata$response_time_catch<-as.numeric(catchdata$response_time_catch) #for graphing later
 }
-
 #MAKE CATCH_PERPERSON DATAFRAME WITH ONE ROW PER PARTICIPANT
 {
 #make dataframe with catch scores and mean response times
@@ -102,7 +116,7 @@ catch_perperson$response_time<-lapply(catch_perperson$participant, get_catchresp
 #MAKING TRIALDATA DATAFRAME WITH ONE ROW PER TRIAL, FOR ALL PARTICIPANTS
 {
 #select trial variables for analysis
-trial_vars<- c("participant", "Circle1_colour", "Circle2_colour", "Colourpair", "similarity", "response_time")
+trial_vars<- c("participant", "Circle1_colour", "Circle2_colour", "Colourpair", "similarity", "response_time", "Temporder")
 
 #make trial data frame
 trialdata <- data[trial_vars]
@@ -140,7 +154,6 @@ for (x in 1:nrow(participants_complete)) {
   trialdata$trialno <- c(1:324)
 }
 }
-
 ## RESCALE similarity to be 0-7 instead of -4/+4 - ONLY NECESSARY IF NOT ALREADY 0-7
  {trialdata$similarity[trialdata$similarity == 4] <- 7
   trialdata$similarity[trialdata$similarity == 3] <- 6
@@ -150,12 +163,11 @@ for (x in 1:nrow(participants_complete)) {
   trialdata$similarity[trialdata$similarity == -2] <-2
   trialdata$similarity[trialdata$similarity == -3] <-1
   trialdata$similarity[trialdata$similarity == -4] <-0 }
-
 ## HISTOGRAM OF ANSWERS PER PARTICIPANTS TO CHECK DISTRIBUTION ACROSS SCALE
 {
 #could modify y axis to show min/max count for better data/ink ratio
 ggplot(trialdata) +
- aes(x = similarity, colour = participant) +
+ aes(x = similarity, fill = participant) +
  geom_bar(position="dodge") +
  theme_minimal()
 
@@ -213,6 +225,10 @@ for (x in 1:nrow(circle1_df)){
 trialdata <- cbind(trialdata, circle1_df, circle2_df)
 }
 
+#############################
+###DOUBLE PASS CORRELATION###
+#############################
+
 #MAKE PASS COLUMNS IN TRIAL DATA 
 {
 trialdata_passes<-trialdata
@@ -233,19 +249,14 @@ trialdata_passes <- na.omit(trialdata_passes)
 means<-data.frame(similarity=rowMeans(trialdata_passes[,c("firstpass_similarity", "secondpass_similarity")]))
 trialdata_passes<-cbind(trialdata_passes,means)
 }
-
-##LONNI##Double pass correlation line plot 
-ggplot(trialdata_passes) +
-  aes(x = trialno) +
-  geom_line(aes(x = trialno, y = firstpass_similarity), size = 0.5, colour = "black") +
-  geom_line(aes(x = trialno,y = secondpass_similarity), size = 0.5, colour = "red") +
-  theme_minimal()
-
 #CORRELATION DATAFRAME WITH ONE ROW PER PARTICIPANT
 {
 #make a dataframe to store correlation values 
 pass_correlation <- data.frame(participants_complete$participant_id)
 names(pass_correlation)[names(pass_correlation) == 'participants_complete.participant_id'] <- 'participant'
+
+pass_correlation$pearson<- NA
+pass_correlation$spearman<- NA
 
 #put correlation values into dataframe
 #x <- participant id
@@ -283,7 +294,6 @@ get_fisherz <-function(x){
 pass_correlation$fisherz <- lapply(pass_correlation[,"pearson"], get_fisherz) #apply function
 pass_correlation$fisherz<-as.numeric(pass_correlation$fisherz) 
   }
-
 #DOUBLE PASS VISUAL PER PARTICIPANT 
 {
 #z=participant id
@@ -306,7 +316,6 @@ get_passvisual <- function(z)
 #List_passvisual <- lapply("614849337165274baeeed45a", get_passvisual)   #get visual for one participant
 #List_passvisual    #print visual/s
 }
-
 #DOUBLE PASS SCATTERPLOT & CORRELATION PER PARTICIPANT
 {
 #z=participant id
@@ -329,7 +338,6 @@ List_scatterplot <- lapply(pass_correlation$participant, get_doublepass_scatterp
 #List_scatterplot <- lapply("5ec34c953a87ce196520eef7", get_doublepass_scatterplot)  #get scatterplot for one participant
 #List_scatterplot  #print scatterplot/s
 }
-
 #HISTOGRAM OF DOUBLE PASS CORRELATIONS FOR ALL PARTICIPANTS
 {
 #save median
@@ -357,7 +365,6 @@ ggplot(pass_correlation, aes(pearson)) +
        title= "Histogram of double pass correlations (rho)",
        subtitle = paste("median=", medianpass))
 }
-
 #REASONABLE THRESHOLD OF EXCLUSION--unfinished
 {
 #save mean fisherz
@@ -375,6 +382,10 @@ z_histogram <- hist(pass_correlation$fisherz,
                     las=1,
                     breaks = 30)
 }
+
+###################
+###DATA ANALYSIS###
+###################
 
 #MAKE DATAFRAME OF COLOURPAIRS
 {
@@ -394,7 +405,6 @@ for (i in 2:nrow(colourpairs)) {
 
 colourpairs<-subset(colourpairs, !(hex1=="duplicate"))
 }
-
 #MATRIX PLOT OF HITS FOR COLOUR
 {
 #Create unique pair name by concatening first colour with second colour
@@ -468,7 +478,7 @@ List_colourdistance<-lapply(colours, get_colourdistance) #apply fn to each colou
 #List_colourdistance
 }
 
-#MAKE DATAFRAME WITH ASYMMETRY PER COLOUR PAIR, FOR EACH PARTICIPANT
+#MAKE DATAFRAME WITH ASYMMETRY PER COLOUR PAIR, FOR EACH PARTICIPANT Sonia (Beth's code )
 {
 #make dataframe with a row for each similarity rating
 similarity_perperson<-trialdata_passes[ ,c("participant", "hex1", "hex2", "similarity")]
@@ -497,6 +507,35 @@ similarity_perperson$similarity_reverse<-as.numeric(similarity_perperson$similar
 similarity_perperson$asymmetry<-abs(similarity_perperson$similarity_given-similarity_perperson$similarity_reverse)
 }
 
+# MAKE DATAFRAME WITH ASYMMETRY INDEX (AsIn) 
+{
+#Calculating absolute difference between first and second pass similatirity ratings  
+trialdata_passes$abs <- abs(trialdata_passes$firstpass_similarity-trialdata_passes$secondpass_similarity) 
+#Creating unique ID for each pair by combining participant ID and Colourpair 
+trialdata_passes$Colourpairperparticipant <- str_c(trialdata_passes$participant, '',trialdata_passes$Colourpair)
+
+#selecting variables for asymmetry analysis
+AsIndata_vars <- c("participant", "Colourpair", "Temporder", "hex1", "hex2", "similarity", "abs", "Colourpairperparticipant")
+#making dataframe
+AsIndata <- trialdata_passes[AsIndata_vars]
+
+#changing to wide so that One row per colour pair per participant (4 ratings per row, first and second pass and reverse order)
+AsIndata_wide <- reshape(AsIndata, idvar = "Colourpairperparticipant", timevar = "Temporder", direction = "wide")
+
+#calculating Asymmetry Index as per Nao's formula (M13 -M24)/((A13+A24)+1)
+AsIndata_wide$AsIn <- (AsIndata_wide$similarity.first - AsIndata_wide$similarity.second)/
+  ((AsIndata_wide$abs.first + AsIndata_wide$abs.second) + 1)
+}
+
+#MAKE ASYMMETRY MATRIX ALL PARTICIPANTS -- To be refined
+{ggplot(AsIndata_wide) +
+  aes(x = hex1.first, y = hex1.second, fill = AsIn) +
+  geom_tile(size = 1.5) +
+  scale_fill_distiller(palette = "RdBu", direction = 1) +
+  ggthemes::theme_base()+
+  theme(axis.text.x=element_text(angle=90,hjust=1))
+}
+  
 #BETH'S CODE: MAKE SIMILARITY MATRIX FOR ONE PARTICIPANT--unfinished
 {
 # factor the dataframes for the plot function
