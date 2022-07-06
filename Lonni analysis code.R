@@ -53,7 +53,15 @@ files <- list.files(path="./data", pattern="*.csv", full.names=TRUE)
 data <- sapply(files, read.csv, simplify=FALSE) %>%
   lapply(\(x) mutate(x, across(Ishi_textbox.text, as.character))) %>% bind_rows(.id = "fileId") 
 
-data <- bind_rows(pilot.data, data)
+##Data with Ishihara test 
+#make a list of data file names
+pb.files <- list.files(path="./data/Problematic file", pattern="*.csv", full.names=TRUE)
+#make a dataframe binding all datafiles
+pb.data <- sapply(pb.files, read.csv, simplify=FALSE) %>%
+  lapply(\(x) mutate(x, across(Ishi_textbox.text, as.character))) %>% bind_rows(.id = "fileId") 
+pb.data$textbox.text <- as.character(pb.data$textbox.text)
+
+data <- bind_rows(pb.data, data, pilot.data)
 }
 
 ###################
@@ -128,10 +136,12 @@ trialdata<- trialdata[!apply(trialdata == "", 1, any),]
 
 #remove participants with low catch scores (<0.8)
 high_catch<-subset(catch_perperson, score_decimal>=0.8)
+low_catch <-subset(catch_perperson, score_decimal<0.8)
 trialdata<-subset(trialdata, participant %in% high_catch$participant)
 
 #remove participants with incomplete data 
 participants <- data.frame(unique(trialdata$participant)) #make dataframe of participants
+
 colnames(participants) <- c("participant_id")
 
 get_trial_count<-function(x){ #get number of trials completed (x = participant id)
@@ -155,25 +165,27 @@ for (x in 1:nrow(participants_complete)) {
 }
 }
 ## RESCALE similarity to be 0-7 instead of -4/+4 - ONLY NECESSARY IF NOT ALREADY 0-7
- {trialdata$similarity[trialdata$similarity == 4] <- 7
+{trialdata$similarity[trialdata$similarity == 4] <- 7
   trialdata$similarity[trialdata$similarity == 3] <- 6
   trialdata$similarity[trialdata$similarity == 2] <- 5
   trialdata$similarity[trialdata$similarity == 1] <- 4
   trialdata$similarity[trialdata$similarity == -1] <-3
   trialdata$similarity[trialdata$similarity == -2] <-2
   trialdata$similarity[trialdata$similarity == -3] <-1
-  trialdata$similarity[trialdata$similarity == -4] <-0 }
+  trialdata$similarity[trialdata$similarity == -4] <-0 
+  }
 ## HISTOGRAM OF ANSWERS PER PARTICIPANTS TO CHECK DISTRIBUTION ACROSS SCALE
 {
 #could modify y axis to show min/max count for better data/ink ratio
 ggplot(trialdata) +
  aes(x = similarity, fill = participant) +
  geom_bar(position="dodge") +
- theme_minimal()
+ theme_minimal()+
+    guides(fill="none")
 
 
 #One facet per participant
-ggplot(trialdata) +
+#ggplot(trialdata) +
  aes(x = similarity, fill = participant) +
  geom_histogram(bins = 30L) +
  scale_fill_hue(direction = 1) +
@@ -272,17 +284,19 @@ getspearman<-function(z){
   return(spearman)
 }
 
-pass_correlation$pearson<-lapply(catch_perperson$participant, getpearson) #apply fn
-pass_correlation$spearman<-lapply(catch_perperson$participant, getspearman)
+pass_correlation$pearson<-lapply(participants_complete$participant, getpearson) #apply fn
+pass_correlation$spearman<-lapply(participants_complete$participant, getspearman)
+
 
 #make correlation numeric for graphing 
 pass_correlation$pearson<-as.numeric(pass_correlation$pearson)
 pass_correlation$spearman<-as.numeric(pass_correlation$spearman)
 
 #if error: check trialdata_passes that resulted in NA correlation 
-#unique(unlist (lapply (pass_correlation, function (x) which (is.na (x))))) 
-#trialdata_passes[trialdata_passes$participant == '614849337165274baeeed45a',] 
-#drop rows with NA correlation #pass_correlation<- na.omit(pass_correlation) 
+unique(unlist (lapply (pass_correlation, function (x) which (is.na (x))))) 
+#trialdata_passes[trialdata_passes$participant == '61652222bfd9351c91a6585a',] 
+#drop rows with NA correlation #
+pass_correlation<- na.omit(pass_correlation) 
 
 #covert rho to fisher's z
 #x=rho value
@@ -365,11 +379,17 @@ ggplot(pass_correlation, aes(pearson)) +
        title= "Histogram of double pass correlations (rho)",
        subtitle = paste("median=", medianpass))
 }
-#REASONABLE THRESHOLD OF EXCLUSION--unfinished
+#REASONABLE THRESHOLD OF EXCLUSION (Doublepass cor below 2SD)
 {
 #save mean fisherz
 mean_z<- round(mean(pass_correlation$fisherz), 2)
 sd_z<- round(sd(pass_correlation$fisherz), 2)
+
+#Participants below 2 standard deviation of mean correlation
+outsiders <- pass_correlation[pass_correlation$fisherz<(mean_z-2*sd_z),]
+
+pass_correlation <- subset(pass_correlation, !participant %in% outsiders$participant)
+trialdata <- subset(trialdata, !participant %in% participants_incomplete$participant_id)
 
 #save histogram of fisher z for all participants
 z_histogram <- hist(pass_correlation$fisherz,
@@ -393,17 +413,16 @@ z_histogram <- hist(pass_correlation$fisherz,
 colourpairs <- unique(trialdata_passes[ , c("hex1", "hex2")]) 
 
 #remove flipped colour pairs so each colour pair is only listed once
+#for (i in 2:nrow(colourpairs)) {
+#  for (j in 1:(i-1)){
+#    if ((colourpairs$hex1[i] == colourpairs$hex2[j]) 
+#        && (colourpairs$hex2[i] == colourpairs$hex1[j])) {
+#      colourpairs$hex1[i] = "duplicate"
+#    }
+#  }
+#}
 
-for (i in 2:nrow(colourpairs)) {
-  for (j in 1:(i-1)){
-    if ((colourpairs$hex1[i] == colourpairs$hex2[j]) 
-        && (colourpairs$hex2[i] == colourpairs$hex1[j])) {
-      colourpairs$hex1[i] = "duplicate"
-    }
-  }
-}
-
-colourpairs<-subset(colourpairs, !(hex1=="duplicate"))
+#colourpairs<-subset(colourpairs, !(hex1=="duplicate"))
 }
 #MATRIX PLOT OF HITS FOR COLOUR
 {
@@ -421,11 +440,19 @@ colourpairs$pair_hitcount <-lapply(colourpairs$pair, get_pair_hitcount)
 
 colourpairs$pair_hitcount <- as.integer(colourpairs$pair_hitcount)
 
+#heatmap of hitcount (the more a pair is tested, the 'hotter' it gets)
 ggplot(colourpairs) +
   aes(x = hex1, y = hex2, fill= pair_hitcount) +
-  geom_tile(size = 1.2) +
+  geom_raster() +
   theme_pubr()+
-  theme(axis.text.x=element_text(angle=90,hjust=1))
+  theme(axis.text.x=element_text(angle=90,hjust=1, size=7), axis.text.y = element_text(size = 7))+
+  scale_fill_gradient(low = "grey", high = "black", na.value = "green")
+
+#distribution of hitcounts
+#ggplot(colourpairs) +
+#  aes(x = pair_hitcount) +
+#  geom_bar() +
+#  theme_minimal()
 }
 
 #MAKE DATAFRAME WITH MEAN SIMILARITY PER COLOUR PAIR (across both colour orders/both passes/all participants)
@@ -438,8 +465,6 @@ for (x in 1:nrow(mean_similarity)) {  #makes a temporary dataframe with all the 
   c<-rbind(a, b) #all similarty ratings for colour pair x
   mean_similarity$mean[x]<-mean(as.matrix(c))
 }
-
-
 
 #VISUALISE DISTANCES FROM ONE COLOUR
 {
@@ -528,12 +553,21 @@ AsIndata_wide$AsIn <- (AsIndata_wide$similarity.first - AsIndata_wide$similarity
 }
 
 #MAKE ASYMMETRY MATRIX ALL PARTICIPANTS -- To be refined
-{ggplot(AsIndata_wide) +
+{
+#order from ariel   
+#col.od.df <- read_excel("Colour order from Ariel.xlsx")
+#apply order 
+
+    
+#plot  
+ggplot(AsIndata_wide) +
   aes(x = hex1.first, y = hex1.second, fill = AsIn) +
-  geom_tile(size = 1.5) +
-  scale_fill_distiller(palette = "RdBu", direction = 1) +
+  geom_raster() +
+  scale_fill_distiller(palette = "RdBu", direction = 1, na.value = "green") +
   ggthemes::theme_base()+
-  theme(axis.text.x=element_text(angle=90,hjust=1))
+  theme(axis.text.x= element_text(size= 7, angle=90, colour=sort(unique(AsIndata_wide$hex1.first))))+
+  theme(axis.text.y = element_text(size= 7, colour=sort(unique(AsIndata_wide$hex1.second))))
+  
 }
   
 #BETH'S CODE: MAKE SIMILARITY MATRIX FOR ONE PARTICIPANT--unfinished
@@ -548,5 +582,4 @@ dissimdata2 <- function(trialdata, colours){
   return(trialdata)
 }
 }
-
 
