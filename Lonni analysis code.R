@@ -55,13 +55,20 @@ data <- sapply(files, read.csv, simplify=FALSE) %>%
 
 ##Data with Ishihara test 
 #make a list of data file names
+waveiv.files <- list.files(path="./data/wave IV", pattern="*.csv", full.names=TRUE)
+#make a dataframe binding all datafiles
+waveiv.data <- sapply(waveiv.files, read.csv, simplify=FALSE) %>%
+  lapply(\(x) mutate(x, across(Ishi_textbox.text, as.character))) %>% bind_rows(.id = "fileId") 
+
+##Data with Ishihara test 
+#make a list of data file names
 pb.files <- list.files(path="./data/Problematic file", pattern="*.csv", full.names=TRUE)
 #make a dataframe binding all datafiles
 pb.data <- sapply(pb.files, read.csv, simplify=FALSE) %>%
   lapply(\(x) mutate(x, across(Ishi_textbox.text, as.character))) %>% bind_rows(.id = "fileId") 
 pb.data$textbox.text <- as.character(pb.data$textbox.text)
 
-data <- bind_rows(pb.data, data, pilot.data)
+data <- bind_rows(pb.data, data, pilot.data, waveiv.data)
 }
 
 ###################
@@ -121,6 +128,8 @@ get_catchresponsetime<- function(z){
 catch_perperson$response_time<-lapply(catch_perperson$participant, get_catchresponsetime)
 }
 
+catch_perperson$score_decimal <-as.character(catch_perperson$score_decimal)
+
 #MAKING TRIALDATA DATAFRAME WITH ONE ROW PER TRIAL, FOR ALL PARTICIPANTS
 {
 #select trial variables for analysis
@@ -154,6 +163,7 @@ participants_incomplete <- subset(participants,trial_count < 324)
 
 #dataframe of participants with complete data 
 participants_complete<- subset(participants,trial_count==324)
+participants_ubercomplete<- subset(participants,trial_count>324)
 
 trialdata <- subset(trialdata, !participant %in% participants_incomplete$participant_id) #subset trialdata for participants who completed all trials
 
@@ -286,7 +296,6 @@ getspearman<-function(z){
 
 pass_correlation$pearson<-lapply(participants_complete$participant, getpearson) #apply fn
 pass_correlation$spearman<-lapply(participants_complete$participant, getspearman)
-
 
 #make correlation numeric for graphing 
 pass_correlation$pearson<-as.numeric(pass_correlation$pearson)
@@ -424,6 +433,7 @@ colourpairs <- unique(trialdata_passes[ , c("hex1", "hex2")])
 
 #colourpairs<-subset(colourpairs, !(hex1=="duplicate"))
 }
+
 #MATRIX PLOT OF HITS FOR COLOUR
 {
 #Create unique pair name by concatening first colour with second colour
@@ -447,7 +457,11 @@ ggplot(colourpairs) +
   theme_pubr()+
   theme(axis.text.x=element_text(angle=90,hjust=1, size=7), axis.text.y = element_text(size = 7))+
   scale_fill_gradient(low = "grey", high = "black", na.value = "green")
-
+ggplot(colourpairs) +
+  aes(x = hex1, y = hex2, fill= pair_hitcount) +
+  geom_raster() +
+  theme_pubr()+
+  theme(axis.text.x=element_text(angle=90,hjust=1, size=7), axis.text.y = element_text(size = 7))
 #distribution of hitcounts
 #ggplot(colourpairs) +
 #  aes(x = pair_hitcount) +
@@ -456,7 +470,7 @@ ggplot(colourpairs) +
 }
 
 #MAKE DATAFRAME WITH MEAN SIMILARITY PER COLOUR PAIR (across both colour orders/both passes/all participants)
-mean_similarity<-colourpairs
+{mean_similarity<-colourpairs
 mean_similarity$mean<-NA
 
 for (x in 1:nrow(mean_similarity)) {  #makes a temporary dataframe with all the similarity ratings for one colourpair (x = row in mean_similarity ie. one per colourpair)
@@ -465,7 +479,7 @@ for (x in 1:nrow(mean_similarity)) {  #makes a temporary dataframe with all the 
   c<-rbind(a, b) #all similarty ratings for colour pair x
   mean_similarity$mean[x]<-mean(as.matrix(c))
 }
-
+}
 #VISUALISE DISTANCES FROM ONE COLOUR
 {
 #list of unique hex values
@@ -503,7 +517,7 @@ List_colourdistance<-lapply(colours, get_colourdistance) #apply fn to each colou
 #List_colourdistance
 }
 
-#MAKE DATAFRAME WITH ASYMMETRY PER COLOUR PAIR, FOR EACH PARTICIPANT Sonia (Beth's code )
+#MAKE DATAFRAME WITH ASYMMETRY PER COLOUR PAIR, FOR EACH PARTICIPANT Sonia (Beth's code)
 {
 #make dataframe with a row for each similarity rating
 similarity_perperson<-trialdata_passes[ ,c("participant", "hex1", "hex2", "similarity")]
@@ -532,7 +546,7 @@ similarity_perperson$similarity_reverse<-as.numeric(similarity_perperson$similar
 similarity_perperson$asymmetry<-abs(similarity_perperson$similarity_given-similarity_perperson$similarity_reverse)
 }
 
-# MAKE DATAFRAME WITH ASYMMETRY INDEX (AsIn) 
+#MAKE DATAFRAME WITH ASYMMETRY INDEX (AsIn) 
 {
 #Calculating absolute difference between first and second pass similatirity ratings  
 trialdata_passes$abs <- abs(trialdata_passes$firstpass_similarity-trialdata_passes$secondpass_similarity) 

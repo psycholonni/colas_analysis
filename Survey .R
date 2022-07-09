@@ -9,12 +9,12 @@ surveydata<-data[, survey_vars]
 
 #rename answers to make some sense
 surveydata <- surveydata %>% rename(location.diffi=textbox.text,
-                                    colour.diff= textbox_2.text,
+                                    colour.diffi= textbox_2.text,
                                     normal.acuity= textbox_3.text,
                                     colour.vision= textbox_4.text,
                                     answer.strategy = textbox_5.text,
                                     serious.check = textbox_6.text)
 #remove empty cells
-surveydata <- surveydata %>% drop_na()
+surveydata <-surveydata[!apply(surveydata=="",1,any),]
 
 #could try to do a word cloud or something but would need to reformat data so that y/Y/Yes/yes

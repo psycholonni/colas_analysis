@@ -1,5 +1,4 @@
 ## ISHIHARA
-
 library(readxl)
 setwd("~/thesis/colas_analysis")
 
@@ -16,8 +15,9 @@ setwd("~/thesis/colas_analysis")
 
 #MAKE DATAFRAME WITH ONE ROW PER ANSWER
 {
-IH_vars<- c("participant", "Ishi_textbox.text", "Ishi_trial_keyresp.rt", "imageaddress")
-
+IH_vars<- c("participant", "Ishi_textbox.text", "imageaddress")
+  #"Ishi_trial_keyresp.rt",
+  
 #make catch data frame 
 IHdata<-data[IH_vars]
 
@@ -55,7 +55,7 @@ get_IHscoredecimal<- function(z){
 }
 IH_perperson$score_decimal<-lapply(IH_perperson$participant, get_IHscoredecimal)  
 }
-#get IH score as fraction
+#get IH score as fraction, not sure that's useful either
 {#z=participant id
 get_IHscorefraction<- function(z){ 
   temp_df <- subset(IHdata,participant==z)
@@ -66,6 +66,7 @@ get_IHscorefraction<- function(z){
 }
 IH_perperson$score_fraction<-lapply(IH_perperson$participant, get_IHscorefraction)
 }
+
 #get IH correctly answered 
 {get_IHcorrectQs<- function(z){ 
   temp_df <- subset(IHdata,participant==z)
@@ -84,7 +85,7 @@ IH_perperson$score_fraction<-lapply(IH_perperson$participant, get_IHscorefractio
 IH_perperson$total_answered<-lapply(IH_perperson$participant, get_IHtotal_answered)
 IH_perperson$total_answered <- as.numeric(IH_perperson$total_answered)
 }
-#get average response time
+#get average response time, no longer available with click next 
 {get_IHrt<- function(z){
   temp_df <- subset(IHdata,participant==z)
   rt_IH<-mean(temp_df$Ishi_trial_keyresp.rt)
@@ -100,6 +101,7 @@ head(singleIHdata)
 
 #this participant submitted two files
 IH_perperson <- subset(IH_perperson,!participant == "61716a16c157db249e36fc46")
+IH_perperson <- subset(IH_perperson,!participant == "614deecf67f2c8ccfe3df23b")
 
 #Distribution of IH scores 
 ggplot(IH_perperson, aes(correctA)) +
@@ -110,3 +112,40 @@ ggplot(IH_perperson, aes(correctA)) +
   geom_rangeframe()+
   labs(x="Ishihara score",
        title= "Histogram of Ishihara score")
+
+#below threshold of normal colour vision
+IH_perperson.low <- subset(IH_perperson, correctA <14)
+#get self report answer 
+get_surveyanswer<- function(z){ 
+  temp_df <- subset(surveydata,participant==z)
+  colour.vision <- temp_df$colour.vision
+    return(colour.vision)
+}
+IH_perperson.low$surveyanswer <- lapply(IH_perperson.low$participant, get_surveyanswer)
+    
+#get catch score  
+get_catchscore<- function(z){ 
+  temp_df <- subset(catch_perperson,participant==z)
+  catchdecimal <- as.numeric(temp_df$score_decimal)
+  return(catchdecimal)
+}
+IH_perperson.low$catchdecimal<- lapply(IH_perperson.low$participant, get_catchscore)
+#IH_perperson.low$catchdecimal <- as.numeric(IH_perperson.low$catchdecimal)
+
+#plot catch vs lowIshihara 
+ggplot(IH_perperson.low, aes(correctA, catchdecimal))+
+  geom_point()
+
+#PLOTTING CATCHxISHIHARA SCORE
+#get the catch score 
+IH_perperson$catchdecimal<- lapply(IH_perperson$participant, get_catchscore)
+#make numeric to be able to plot
+IH_perperson$catchdecimal <- as.numeric(IH_perperson$catchdecimal)
+#plot
+ggplot(IH_perperson, aes(correctA, catchdecimal))+
+  geom_point(position = "jitter")+
+  scale_y_continuous(breaks = as.numeric(round(quantile(IH_perperson$catchdecimal),digits = 2))) + 
+  scale_x_continuous(breaks = as.numeric(round(quantile(IH_perperson$correctA),digits = 2))) +
+  theme_pubr() +   
+  theme(axis.line = element_blank())+
+  geom_rangeframe()
