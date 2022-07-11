@@ -469,17 +469,35 @@ ggplot(colourpairs) +
 #  theme_minimal()
 }
 
-#MAKE DATAFRAME WITH MEAN SIMILARITY PER COLOUR PAIR (across both colour orders/both passes/all participants)
-{mean_similarity<-colourpairs
-mean_similarity$mean<-NA
-
-for (x in 1:nrow(mean_similarity)) {  #makes a temporary dataframe with all the similarity ratings for one colourpair (x = row in mean_similarity ie. one per colourpair)
+#MAKE DATAFRAME WITH MEAN SIMILARITY PER COLOUR PAIR 
+{
+#mean_similarity<-colourpairs
+#mean_similarity$mean<-NA
+#for (x in 1:nrow(mean_similarity)) {#  #makes a temporary dataframe with all the similarity ratings for one colourpair (x = row in mean_similarity ie. one per colourpair)
   a<-subset(trialdata_passes,trialdata_passes$hex1==mean_similarity$hex1[x] & trialdata_passes$hex2==mean_similarity$hex2[x], c(firstpass_similarity, secondpass_similarity)) #similarity with exact hex match
   b<-subset(trialdata_passes,trialdata_passes$hex1==mean_similarity$hex2[x] & trialdata_passes$hex2==mean_similarity$hex1[x], c(firstpass_similarity, secondpass_similarity)) #similarity with flipped hex order
   c<-rbind(a, b) #all similarty ratings for colour pair x
   mean_similarity$mean[x]<-mean(as.matrix(c))
+#}
+
+get_mean_similarity <- function(z){ 
+  a<-subset(trialdata_passes, pairofcolour==z) #similarity with exact hex match
+  mean<-mean(a$similarity)
+  return(mean)
 }
+colourpairs$mean.similarity<-lapply(colourpairs$pair, get_mean_similarity) 
+colourpairs$mean.similarity<- as.numeric(colourpairs$mean.similarity)
 }
+#VISUALISE MEAN SIMILARITY
+{ggplot(colourpairs) +
+  aes(x = hex1, y = hex2, fill = mean.similarity) +
+  geom_raster() +
+  scale_fill_gradientn(colors = rainbow(7),breaks= c(0,1,2,3,4,5,6,7))+
+  theme_pubr()+
+  theme(axis.text.x= element_text(size= 7, angle=90, colour=sort(unique(colourpairs$hex1))))+
+  theme(axis.text.y = element_text(size= 7, colour=sort(unique(colourpairs$hex2))))
+}
+
 #VISUALISE DISTANCES FROM ONE COLOUR
 {
 #list of unique hex values
