@@ -129,15 +129,16 @@ get_catchscore<- function(z){
   catchdecimal <- as.numeric(temp_df$score_decimal)
   return(catchdecimal)
 }
+IH_perperson$catchdecimal<- lapply(IH_perperson$participant, get_catchscore)
 IH_perperson.low$catchdecimal<- lapply(IH_perperson.low$participant, get_catchscore)
-#IH_perperson.low$catchdecimal <- as.numeric(IH_perperson.low$catchdecimal)
+IH_perperson.low$catchdecimal <- as.numeric(IH_perperson.low$catchdecimal)
 
 #plot catch vs lowIshihara 
 ggplot(IH_perperson.low, aes(correctA, catchdecimal))+
   geom_point()
 
 #PLOTTING CATCHxISHIHARA SCORE
-#get the catch score 
+{#get the catch score 
 IH_perperson$catchdecimal<- lapply(IH_perperson$participant, get_catchscore)
 #make numeric to be able to plot
 IH_perperson$catchdecimal <- as.numeric(IH_perperson$catchdecimal)
@@ -149,3 +150,34 @@ ggplot(IH_perperson, aes(correctA, catchdecimal))+
   theme_pubr() +   
   theme(axis.line = element_blank())+
   geom_rangeframe()
+
+#showing all participants with low IH in red
+ggplot(IH_perperson, aes(correctA, catchdecimal))+
+  geom_point(position = "jitter")+
+  geom_point(data = IH_perperson.low, aes(correctA, catchdecimal), colour ="red")+
+  scale_y_continuous(breaks = as.numeric(round(quantile(IH_perperson$catchdecimal),digits = 2))) + 
+  scale_x_continuous(breaks = as.numeric(round(quantile(IH_perperson$correctA),digits = 2))) +
+  theme_pubr() +   
+  theme(axis.line = element_blank())+
+  geom_rangeframe()
+}
+
+#PLOTTING ISHIHARAxDoublepass
+#get catch score  
+get_doublepass<- function(z){ 
+  temp_df <- subset(pass_correlation,participant==z)
+  pearson <- as.numeric(temp_df$pearson)
+  return(pearson)
+}
+
+IH_perperson$doublepass<- lapply(IH_perperson$participant, get_doublepass)
+IH_perperson$doublepass <- as.numeric(IH_perperson$doublepass)
+
+IH_perperson.low$doublepass<- lapply(IH_perperson.low$participant, get_doublepass)
+IH_perperson.low$doublepass <- as.numeric(IH_perperson.low$doublepass)
+
+#showing all participants with low IH in red
+ggplot(IH_perperson, aes(correctA, doublepass))+
+  geom_point(position = "jitter")+
+  geom_point(data = IH_perperson.low, aes(correctA, doublepass), colour ="red")+
+  theme_pubr()

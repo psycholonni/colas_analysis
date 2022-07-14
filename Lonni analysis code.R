@@ -127,7 +127,6 @@ get_catchresponsetime<- function(z){
 }
 catch_perperson$response_time<-lapply(catch_perperson$participant, get_catchresponsetime)
 }
-
 #MAKING TRIALDATA DATAFRAME WITH ONE ROW PER TRIAL, FOR ALL PARTICIPANTS
 {
 #select trial variables for analysis
@@ -235,11 +234,11 @@ circle2_df<-as.data.frame(circle2_df)
 circle1_df$hex1 <- NA
 circle2_df$hex2 <- NA
 
-#convert rgb to hex
-for (x in 1:nrow(circle1_df)){
-  circle1_df$hex1[x] <- rgb(circle1_df[x,1],circle1_df[x,2],circle1_df[x,3], maxColorValue=255)
-  circle2_df$hex2[x]<- rgb(circle2_df[x,1],circle2_df[x,2],circle2_df[x,3], maxColorValue=255)
-}
+#rgb2hex function
+rgb2hex <- function(r, g, b) {rgb(r, g, b, maxColorValue = 255)}
+#Get hex in each circle dataframe
+circle1_df$hex1 <- apply(circle1_df, 1, function(x) rgb2hex(x[1], x[2], x[3]))
+circle2_df$hex2 <- apply(circle2_df, 1, function(x) rgb2hex(x[1], x[2], x[3]))
 
 #bind circle colour dataframes to trialdata
 trialdata <- cbind(trialdata, circle1_df, circle2_df)
@@ -399,6 +398,11 @@ pass_correlation <- subset(pass_correlation, !participant %in% outsiders$partici
 trialdata <- subset(trialdata, !participant %in% participants_incomplete$participant_id)
 }
 
+#############################
+###ISHIHARA COLOUR TESTING###
+#############################
+
+
 
 ###################
 ###DATA ANALYSIS###
@@ -421,7 +425,6 @@ colourpairs <- unique(trialdata_passes[ , c("hex1", "hex2")])
 
 #colourpairs<-subset(colourpairs, !(hex1=="duplicate"))
 }
-
 #MATRIX PLOT OF HITS FOR COLOUR
 {
 #Create unique pair name by concatening first colour with second colour
@@ -445,11 +448,9 @@ ggplot(colourpairs) +
   theme_pubr()+
   theme(axis.text.x=element_text(angle=90,hjust=1, size=7), axis.text.y = element_text(size = 7))+
   scale_fill_gradient(low = "grey", high = "black", na.value = "green")
-ggplot(colourpairs) +
-  aes(x = hex1, y = hex2, fill= pair_hitcount) +
-  geom_raster() +
-  theme_pubr()+
-  theme(axis.text.x=element_text(angle=90,hjust=1, size=7), axis.text.y = element_text(size = 7))
+
+#ggplot(colourpairs) + aes(x = hex1, y = hex2, fill= pair_hitcount) + geom_raster() +  theme_pubr()+  theme(axis.text.x=element_text(angle=90,hjust=1, size=7), axis.text.y = element_text(size = 7))
+
 #distribution of hitcounts
 #ggplot(colourpairs) +
 #  aes(x = pair_hitcount) +
@@ -496,13 +497,37 @@ for (x in 1:nrow(mean_similarity)) {  #makes a temporary dataframe with all the 
   c<-rbind(a, b) #all similarty ratings for colour pair x
   mean_similarity$meanas[x]<-mean(as.matrix(c))
 }
-ggplot(mean_similarity) +
+}
+#SIMILARITY MATRIX
+{ggplot(mean_similarity) +
   aes(x = hex1, y = hex2, fill = mean) +
   geom_raster() +
   scale_fill_gradientn(colors = rainbow(7),breaks= c(0,1,2,3,4,5,6,7))+
   theme_pubr()+
   theme(axis.text.x= element_text(size= 7, angle=90, colour=sort(unique(mean_similarity$hex1))))+
   theme(axis.text.y = element_text(size= 7, colour=sort(unique(mean_similarity$hex2))))
+}
+
+#MAKE DATAFRAME WITH MEDIAN SIMILARITY PER COLOUR PAIR (AB==BA)
+{
+median_similarity<-colourpairs
+median_similarity$median<-NA
+  
+for (x in 1:nrow(median_similarity)) {  #makes a temporary dataframe with all the similarity ratings for one colourpair (x = row in mean_similarity ie. one per colourpair)
+    a<-subset(trialdata_passes,trialdata_passes$hex1==median_similarity$hex1[x] & trialdata_passes$hex2==median_similarity$hex2[x], c(firstpass_similarity, secondpass_similarity)) #similarity with exact hex match
+    b<-subset(trialdata_passes,trialdata_passes$hex1==median_similarity$hex2[x] & trialdata_passes$hex2==median_similarity$hex1[x], c(firstpass_similarity, secondpass_similarity)) #similarity with flipped hex order
+    c<-rbind(a, b) #all similarty ratings for colour pair x
+    median_similarity$median[x]<-median(as.matrix(c))
+  }
+}
+#MEDIAN SIMILARITY MATRIX
+{ggplot(median_similarity) +
+    aes(x = hex1, y = hex2, fill = median) +
+    geom_raster() +
+    scale_fill_gradient(low= "grey", high= "black",breaks= c(0,1,2,3,4,5,6,7))+
+    theme_pubr()+
+    theme(axis.text.x= element_text(size= 7, angle=90, colour=sort(unique(median_similarity$hex1))))+
+    theme(axis.text.y = element_text(size= 7, colour=sort(unique(median_similarity$hex2))))
 }
 
 #MAKE DATAFRAME WITH MEAN VARIANCE PER COLOUR PAIR (AB==BA)
@@ -526,42 +551,10 @@ ggplot(mean_variance) +
   theme(legend.position = "right")+
   labs(x= "Colour presented first", y= "Colour presented second")
 }
-#VISUALISE DISTANCES FROM ONE COLOUR
-{
-#list of unique hex values
-colours<-unique(trialdata_passes$hex1)
 
-#add column to similarity_means with random numbers 0-1 (to space out colour dots on graph)
-mean_similarity$random<-runif(nrow(mean_similarity))
-
-#plot mean distances from one colour
-#z=hex string
-get_colourdistance<-function(z) {
-  temp_df<-rbind(subset(mean_similarity, hex1==z), subset(mean_similarity, hex2==z)) #df for one colour 
-  temp_df$plothex<-NA  #column with all the colours that were compared to colour z
-  for (x in 1:nrow(temp_df)){
-    if(temp_df$hex1[x]==z){
-      temp_df$plothex[x]<-temp_df$hex2[x]
-    }
-    if(temp_df$hex2[x]==z){
-      temp_df$plothex[x]<-temp_df$hex1[x]
-    }
-    if(temp_df$hex1[x]==z & temp_df$hex2[x]==z){
-      temp_df$plothex[x]<-temp_df$hex1[x]
-    }
-  }
-  
-  G <- ggplot(temp_df,aes(x=mean)) +
-    geom_point(aes(y = random,color=z), size = 2, col=temp_df$plothex) +
-    labs(title="distance from", subtitle = z, x="mean similarity rating", y="random spread for clarity") +
-    theme(plot.subtitle = element_text(colour = z))
-  G
-}
-
-List_colourdistance<-lapply(colours, get_colourdistance) #apply fn to each colour, one at a time
-#List_colourdistance<-lapply("#40A144", get_colourdistance) #apply fn to one colour
-#List_colourdistance
-}
+#Get Standard Error of Mean 
+#standard_error <- function(x) sd(x) / sqrt(length(x))
+mean_variance$sem <- sqrt(mean_variance$var)/sqrt(mean_variance$pair_hitcount)
 
 #MAKE DATAFRAME WITH ASYMMETRY INDEX (AsIn) for each participant
 {
@@ -599,8 +592,9 @@ test <- subset(colourpairs, is.na(colourpairs$mean.asymmetry))
 test <- subset(AsIndata_wide, is.na(AsIndata_wide$AsIn))
 }
 
-#gathering AsIn using for loop
-mean_asymmetry<-colourpairs
+#MAKE DATAFRAME WITH ASYMMETRY PER COLOUR PAIR (AB=BA)
+{#gathering AsIn using for loop
+mean_asymmetry<-mean_variance
 mean_asymmetry$meanas<-NA
 
 for (x in 1:nrow(mean_asymmetry)) {  #makes a temporary dataframe with all the similarity ratings for one colourpair (x = row in mean_similarity ie. one per colourpair)
@@ -609,7 +603,7 @@ for (x in 1:nrow(mean_asymmetry)) {  #makes a temporary dataframe with all the s
   c<-rbind(a, b) #all similarty ratings for colour pair x
   mean_asymmetry$meanas[x]<-mean(as.matrix(c))
 }
-
+}
 
 #MAKE ASYMMETRY MATRIX ALL PARTICIPANTS -- To be refined
 {
@@ -650,5 +644,12 @@ ggplot(mean_asymmetry) +
 ggplot(mean_asymmetry) +
   aes(y = meanas, x = pair_hitcount) +
   geom_point(position = "jitter") +
+  geom_hline(yintercept = 0, colour = "red")+
+  theme_pubr()
+
+#FUNNEL PLOT Asymmetry x SEM
+ggplot(mean_asymmetry) +
+  aes(y = meanas, x = sem) +
+  geom_point() +
   geom_hline(yintercept = 0, colour = "red")+
   theme_pubr()
