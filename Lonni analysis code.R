@@ -452,10 +452,10 @@ ggplot(colourpairs) +
 #ggplot(colourpairs) + aes(x = hex1, y = hex2, fill= pair_hitcount) + geom_raster() +  theme_pubr()+  theme(axis.text.x=element_text(angle=90,hjust=1, size=7), axis.text.y = element_text(size = 7))
 
 #distribution of hitcounts
-#ggplot(colourpairs) +
-#  aes(x = pair_hitcount) +
-#  geom_bar() +
-#  theme_minimal()
+ggplot(colourpairs) +
+  aes(x= pair_hitcount) +
+  geom_bar() +
+  theme_minimal()
 }
 
 #MAKE DATAFRAME WITH MEAN SIMILARITY PER COLOUR PAIR MAINTAINING DIRECTIONNALITY (AB=/=BA)
@@ -463,10 +463,10 @@ ggplot(colourpairs) +
 #mean_similarity<-colourpairs
 #mean_similarity$mean<-NA
 #for (x in 1:nrow(mean_similarity)) {#  #makes a temporary dataframe with all the similarity ratings for one colourpair (x = row in mean_similarity ie. one per colourpair)
-  a<-subset(trialdata_passes,trialdata_passes$hex1==mean_similarity$hex1[x] & trialdata_passes$hex2==mean_similarity$hex2[x], c(firstpass_similarity, secondpass_similarity)) #similarity with exact hex match
-  b<-subset(trialdata_passes,trialdata_passes$hex1==mean_similarity$hex2[x] & trialdata_passes$hex2==mean_similarity$hex1[x], c(firstpass_similarity, secondpass_similarity)) #similarity with flipped hex order
-  c<-rbind(a, b) #all similarty ratings for colour pair x
-  mean_similarity$mean[x]<-mean(as.matrix(c))
+#  a<-subset(trialdata_passes,trialdata_passes$hex1==mean_similarity$hex1[x] & trialdata_passes$hex2==mean_similarity$hex2[x], c(firstpass_similarity, secondpass_similarity)) #similarity with exact hex match
+#  b<-subset(trialdata_passes,trialdata_passes$hex1==mean_similarity$hex2[x] & trialdata_passes$hex2==mean_similarity$hex1[x], c(firstpass_similarity, secondpass_similarity)) #similarity with flipped hex order
+#  c<-rbind(a, b) #all similarty ratings for colour pair x
+#  mean_similarity$mean[x]<-mean(as.matrix(c))
 #}
 
 get_mean_similarity <- function(z){ 
@@ -477,14 +477,60 @@ get_mean_similarity <- function(z){
 colourpairs$mean.similarity<-lapply(colourpairs$pair, get_mean_similarity) 
 colourpairs$mean.similarity<- as.numeric(colourpairs$mean.similarity)
 }
+#MAKING COLOURS AS FACTORS FOR GRAPHING 
+{# Create blank matrix 
+color.mat.df <- matrix(NA, ncol = 93, nrow = 93)
+# setting all give colours as both row and column names
+colnames(color.mat.df) <- rownames(color.mat.df) <- unique(trialdata$hex1)
+
+# fill matrix
+matrix.df.fill <- function(data,matrix.df){
+  for(i in 1:nrow(data)){
+    row <- data[i,]
+    matrix.df[row$hex1,row$hex2] <- row$mean.similarity
+  }
+  return(matrix.df)
+}
+
+gp.mean.data_vars <- c("hex1", "hex2", "mean.similarity")
+gp.mean.data <- colourpairs[gp.mean.data_vars]
+
+group.mean.mat.df <- matrix.df.fill(gp.mean.data,color.mat.df)
+group.mean.mat.df <- as.data.frame(group.mean.mat.df)
+
+# for visualisation purposes, make a column value indicating correlation with first row
+row.cor <- function(df){
+  v.cor <- vector()
+  for(i in 1:nrow(df)){
+    v.cor <- c(v.cor, cor(df[1],df[i]))
+  }    
+  return(v.cor)
+}
+
+row.factors <- function(colors, correlations){
+  colors$cor <- correlations
+  ordered <- colors[order(-colors$cor),]
+  return(ordered$colour)
+}
+colours_disordered <- as.data.frame(unique(colourpairs$hex1))
+colours_disordered <- rename(colours_disordered, colour = 'unique(colourpairs$hex1)')
+
+
+row.facs <- row.factors(colours_disordered,row.cor(group.mean.mat.df))
+}
+
+#APPLY COLOUR FACTORS TO COLOURPAIRS DATAFRAME
+colourpairs$hex1 <- with(colourpairs, factor(hex1, levels = row.facs))
+colourpairs$hex2 <- with(colourpairs, factor(hex2, levels = row.facs))
+
 #VISUALISE MEAN SIMILARITY
 {ggplot(colourpairs) +
   aes(x = hex1, y = hex2, fill = mean.similarity) +
   geom_raster() +
   scale_fill_gradientn(colors = rainbow(7),breaks= c(0,1,2,3,4,5,6,7))+
   theme_pubr()+
-  theme(axis.text.x= element_text(size= 7, angle=90, colour=sort(unique(colourpairs$hex1))))+
-  theme(axis.text.y = element_text(size= 7, colour=sort(unique(colourpairs$hex2))))
+  theme(axis.text.x= element_text(size= 7, angle=90, colour=row.facs))+
+  theme(axis.text.y = element_text(size= 7, colour=row.facs))
 }
 
 #MAKE DATAFRAME WITH MEAN SIMILARITY PER COLOUR PAIR (AB==BA)
@@ -588,8 +634,6 @@ get_mean_asymmetry <- function(z){
 colourpairs$mean.asymmetry<-lapply(colourpairs$pair, get_mean_asymmetry) 
 colourpairs$mean.asymmetry<- as.numeric(colourpairs$mean.asymmetry)
 
-test <- subset(colourpairs, is.na(colourpairs$mean.asymmetry))
-test <- subset(AsIndata_wide, is.na(AsIndata_wide$AsIn))
 }
 
 #MAKE DATAFRAME WITH ASYMMETRY PER COLOUR PAIR (AB=BA)
@@ -603,6 +647,9 @@ for (x in 1:nrow(mean_asymmetry)) {  #makes a temporary dataframe with all the s
   c<-rbind(a, b) #all similarty ratings for colour pair x
   mean_asymmetry$meanas[x]<-mean(as.matrix(c))
 }
+
+mean_asymmetry$hex1 <- with(mean_asymmetry, factor(hex1, levels = row.facs))
+mean_asymmetry$hex2 <- with(mean_asymmetry, factor(hex2, levels = row.facs))
 }
 
 #MAKE ASYMMETRY MATRIX ALL PARTICIPANTS -- To be refined
@@ -631,13 +678,15 @@ ggplot(colourpairs) +
     theme(axis.text.y = element_text(size= 7, colour=sort(unique(colourpairs$hex2))))
   
 #plot with mean_asymmetry  CORRECT ONE TO USE 
+
 ggplot(mean_asymmetry) +
   aes(x = hex1, y = hex2, fill = meanas) +
   geom_raster() +
-  scale_fill_distiller(palette = "RdBu", direction = 1, na.value = "green") +
+  scale_fill_gradient2(low ="red", high= "blue", mid ="white", midpoint= 0, na.value = "green") +
   ggthemes::theme_base()+
-  theme(axis.text.x= element_text(size= 7, angle=90, colour=sort(unique(mean_asymmetry$hex1))))+
-  theme(axis.text.y = element_text(size= 7, colour=sort(unique(mean_asymmetry$hex2))))
+  theme(axis.text.x= element_text(size= 7, angle=90, colour=row.facs))+
+  theme(axis.text.y = element_text(size= 7, colour=row.facs))
+
   }
 
 #FUNNEL PLOT Asymmetry x Hitcount
@@ -653,3 +702,13 @@ ggplot(mean_asymmetry) +
   geom_point() +
   geom_hline(yintercept = 0, colour = "red")+
   theme_pubr()
+
+
+# density plot of mean asymmetry (AB=BA)
+ggplot(mean_asymmetry)+
+  aes(x=meanas)+
+  geom_density()+
+  theme_minimal()
+
+## T-TESTING UNCORRECTED --- WIP
+mean_asymmetry$p <- t.test(mean_asymmetry$meanas, mu = 0)
