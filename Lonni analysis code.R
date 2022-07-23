@@ -4,7 +4,7 @@
 #This script is for the analysis of asymmetry in colour perception, 
 #Reused code from "Sonia analysis code (Beth pilot)
 
-#block annoying warnings when loading libraries
+#block most warnings when loading libraries
 shhh <- suppressPackageStartupMessages 
 
 #LOAD LIBRARIES
@@ -402,7 +402,7 @@ trialdata <- subset(trialdata, !participant %in% participants_incomplete$partici
 ###ISHIHARA COLOUR TESTING###
 #############################
 
-
+#to be integrated...
 
 ###################
 ###DATA ANALYSIS###
@@ -413,25 +413,14 @@ trialdata <- subset(trialdata, !participant %in% participants_incomplete$partici
 #get unique hex arrangements
 colourpairs <- unique(trialdata_passes[ , c("hex1", "hex2")]) 
 
-#remove flipped colour pairs so each colour pair is only listed once
-#for (i in 2:nrow(colourpairs)) {
-#  for (j in 1:(i-1)){
-#    if ((colourpairs$hex1[i] == colourpairs$hex2[j]) 
-#        && (colourpairs$hex2[i] == colourpairs$hex1[j])) {
-#      colourpairs$hex1[i] = "duplicate"
-#    }
-#  }
-#}
-
-#colourpairs<-subset(colourpairs, !(hex1=="duplicate"))
-}
-#MATRIX PLOT OF HITS FOR COLOUR
-{
 #Create unique pair name by concatening first colour with second colour
 colourpairs$pair <- str_c(colourpairs$hex1, '',colourpairs$hex2)
 
+#do the same for trialdata_passes
 trialdata_passes$pairofcolour <- str_c(trialdata_passes$hex1, '',trialdata_passes$hex2)
-
+}
+#MATRIX PLOT OF HITS FOR COLOUR
+{
 #adding count of colour pairs 
 get_pair_hitcount<-function(x){ #get number of hits on pair of colour (x = colourpair)
   pair_hitcount<-sum(trialdata_passes$pairofcolour == x)
@@ -592,8 +581,8 @@ ggplot(mean_variance) +
   geom_raster() +
   scale_fill_gradient(name="Variance" ,low = "grey", high = "black", na.value = "green")+
   ggthemes::theme_base()+
-  theme(axis.text.x= element_text(size= 6, angle=90, colour=sort(unique(mean_variance$hex1))))+
-  theme(axis.text.y = element_text(size= 6, colour=sort(unique(mean_variance$hex2))))+
+  theme(axis.text.x= element_text(size= 6, angle=90, colour=row.facs))+
+  theme(axis.text.y = element_text(size= 6, colour=row.facs))+
   theme(legend.position = "right")+
   labs(x= "Colour presented first", y= "Colour presented second")
 }
@@ -617,27 +606,42 @@ AsIndata <- trialdata_passes[AsIndata_vars]
 #changing to wide so that One row per colour pair per participant (4 ratings per row, first and second pass and reverse order)
 AsIndata_wide <- reshape(AsIndata, idvar = "Colourpairperparticipant", timevar = "Temporder", direction = "wide")
 
-#calculating Asymmetry Index as per Nao's formula (M13 -M24)/((A13+A24)+1)
-AsIndata_wide$AsIn <- (AsIndata_wide$similarity.first - AsIndata_wide$similarity.second)/
-  ((AsIndata_wide$abs.first + AsIndata_wide$abs.second) + 1)
-
+#renaming because temporder first second makes it confusing with first/second pass
+names(AsIndata_wide)[names(AsIndata_wide) == "similarity.first"] <- "mean13" #similarity.first was the mean of the pair for the first temporder so mean13
+names(AsIndata_wide)[names(AsIndata_wide) == "similarity.second"] <- "mean24"
 
 #Create unique pair name by concatening first colour with second colour
-AsIndata_wide$pair <- str_c(AsIndata_wide$hex1.first, '',AsIndata_wide$hex1.second)
+AsIndata_wide$pair13 <- str_c(AsIndata_wide$hex1.first, '',AsIndata_wide$hex2.first)
+AsIndata_wide$pair24 <- str_c(AsIndata_wide$hex1.second, '',AsIndata_wide$hex2.second)
+
+#calculating Asymmetry Index as per Nao's formula (M13 -M24)/((A13+A24)+1)
+AsIndata_wide$AsIn13 <- (AsIndata_wide$mean13 - AsIndata_wide$mean24)/
+  ((AsIndata_wide$abs.first + AsIndata_wide$abs.second) + 1)
+#calculating Asymmetry Index as per Nao's formula (M24 -M13)/((A13+A24)+1)
+AsIndata_wide$AsIn24 <- (AsIndata_wide$mean24 - AsIndata_wide$mean13)/
+  ((AsIndata_wide$abs.first + AsIndata_wide$abs.second) + 1)
+}
 
 #GET AsIn in Colourpairs DATAFRAME
+{
 get_mean_asymmetry <- function(z){ 
-  a<-subset(AsIndata_wide, pair==z) #similarity with exact hex match
-  mean<-mean(a$AsIn)
-  return(mean)
+  a<-subset(AsIndata_wide, pair13==z) #getting all the instance in pair13 matching the pair of hexcodes
+  a<- a["AsIn13"] #only keeping the asymmetry score of interest 
+  names(a)[names(a)== "AsIn13"] <- "AsIn" #rename to be able to rbind with b
+  b<-subset(AsIndata_wide, pair24==z) #repeating with pair24
+  b<- b["AsIn24"] # again keeping only AsIn24 
+  names(b)[names(b)== "AsIn24"] <- "AsIn" #rename to be able to rbind with a
+  c <-rbind(a, b)
+  AsIn <- mean(c$AsIn)
+  return(AsIn)
 }
-colourpairs$mean.asymmetry<-lapply(colourpairs$pair, get_mean_asymmetry) 
-colourpairs$mean.asymmetry<- as.numeric(colourpairs$mean.asymmetry)
 
+colourpairs$mean.asymmetry<-lapply(colourpairs$pair, get_mean_asymmetry) #apply function
+colourpairs$mean.asymmetry<- as.numeric(colourpairs$mean.asymmetry) #make it numeric
 }
 
 #MAKE DATAFRAME WITH ASYMMETRY PER COLOUR PAIR (AB=BA)
-{#gathering AsIn using for loop
+{#gathering AsIn values using a for loop
 mean_asymmetry<-mean_variance
 mean_asymmetry$meanas<-NA
 
@@ -648,36 +652,23 @@ for (x in 1:nrow(mean_asymmetry)) {  #makes a temporary dataframe with all the s
   mean_asymmetry$meanas[x]<-mean(as.matrix(c))
 }
 
-mean_asymmetry$hex1 <- with(mean_asymmetry, factor(hex1, levels = row.facs))
-mean_asymmetry$hex2 <- with(mean_asymmetry, factor(hex2, levels = row.facs))
+#mean_asymmetry$hex1 <- with(mean_asymmetry, factor(hex1, levels = row.facs))
+#mean_asymmetry$hex2 <- with(mean_asymmetry, factor(hex2, levels = row.facs))
 }
 
 #MAKE ASYMMETRY MATRIX ALL PARTICIPANTS -- To be refined
 {
-#order from ariel   
-#col.od.df <- read_excel("Colour order from Ariel.xlsx")
-#apply order 
 
-    
-#plot  
-ggplot(AsIndata_wide) +
-  aes(x = hex1.first, y = hex1.second, fill = AsIn) +
-  geom_raster() +
-  scale_fill_distiller(palette = "RdBu", direction = 1, na.value = "green") +
-  ggthemes::theme_base()+
-  theme(axis.text.x= element_text(size= 7, angle=90, colour=sort(unique(AsIndata_wide$hex1.first))))+
-  theme(axis.text.y = element_text(size= 7, colour=sort(unique(AsIndata_wide$hex1.second))))
-
-#plot with colour pairs  
+#plot with colour pairs CORRECT ONE TO USE 
 ggplot(colourpairs) +
     aes(x = hex1, y = hex2, fill = mean.asymmetry) +
     geom_raster() +
-    scale_fill_distiller(palette = "RdBu", direction = 1, na.value = "green") +
+    scale_fill_gradient2(low ="red", high= "blue", mid ="white", midpoint= 0, na.value = "green") +
     ggthemes::theme_base()+
-    theme(axis.text.x= element_text(size= 7, angle=90, colour=sort(unique(colourpairs$hex1))))+
-    theme(axis.text.y = element_text(size= 7, colour=sort(unique(colourpairs$hex2))))
+    theme(axis.text.x= element_text(size= 7, angle=90, colour=row.facs))+
+    theme(axis.text.y = element_text(size= 7, colour=row.facs))
   
-#plot with mean_asymmetry  CORRECT ONE TO USE 
+#plot with mean_asymmetry 
 
 ggplot(mean_asymmetry) +
   aes(x = hex1, y = hex2, fill = meanas) +
@@ -690,15 +681,15 @@ ggplot(mean_asymmetry) +
   }
 
 #FUNNEL PLOT Asymmetry x Hitcount
-ggplot(mean_asymmetry) +
-  aes(y = meanas, x = pair_hitcount) +
+ggplot(colourpairs) +
+  aes(y = mean.asymmetry, x = pair_hitcount) +
   geom_point(position = "jitter") +
   geom_hline(yintercept = 0, colour = "red")+
   theme_pubr()
 
 #FUNNEL PLOT Asymmetry x SEM
-ggplot(mean_asymmetry) +
-  aes(y = meanas, x = sem) +
+ggplot(mean_variance) +
+  aes(y = mean.asymmetry, x = sem) +
   geom_point() +
   geom_hline(yintercept = 0, colour = "red")+
   theme_pubr()
