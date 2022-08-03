@@ -115,6 +115,10 @@ ggplot(IH_perperson, aes(correctA)) +
 
 #below threshold of normal colour vision
 IH_perperson.low <- subset(IH_perperson, correctA <14)
+
+#Removing participants with low Ishihara scores
+trialdata_passes <- subset(trialdata_passes, !participant %in% IH_perperson.low$participant)
+
 #get self report answer 
 get_surveyanswer<- function(z){ 
   temp_df <- subset(surveydata,participant==z)

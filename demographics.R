@@ -38,3 +38,30 @@ demographics <- subset(demographics, !status=='RETURNED')
 demographics <- subset(demographics, !status=='REJECTED')
 mean(demographics$time_mins)
 median(demographics$time_mins)
+sd(demographics$time_mins)
+
+#Age Medan & median
+mean(demographics$age, na.rm= TRUE)
+sd(demographics$age, na.rm= TRUE)
+median(demographics$age, na.rm= TRUE)
+
+#Countries/ Nationality 
+demographics %>%
+ filter(!(reviewed_at_datetime %in% "") | is.na(reviewed_at_datetime)) %>%
+ ggplot() +
+ aes(x = Nationality) +
+ geom_bar(fill = "#112446") +
+ coord_flip() +
+ theme_pubr()
+
+#Time taken vs catch score
+demographics %>%
+ filter(!(reviewed_at_datetime %in% "") | is.na(reviewed_at_datetime)) %>%
+ ggplot() +
+ aes(x = time_mins, y = catch.score_decimal) +
+ geom_point(shape = "circle", size = 1.5, 
+ colour = "#112446") +
+ theme_classic()
+
+# get proportion of males/females as well as students 
+table(demographics$Sex)
