@@ -7,7 +7,7 @@
 #block most warnings when loading libraries
 shhh <- suppressPackageStartupMessages 
 
-#ariel's cheat to display 
+#ariel's cheat to display colour in axis
 block <- paste(strrep("\U2588",10),sep='')
 block_rep <- rep(block,93)
 
@@ -116,6 +116,9 @@ data <- bind_rows(pb.data, data, pilot.data, waveiv.data)
 ###DATA CLEANING###
 ###################
 
+#screening participants with less framerate too low
+data <- data[data$frameRate>29,]
+
 #MAKE CATCHDATA DATAFRAME WITH ONE ROW PER CATCH TRIAL, FOR ALL PARTICIPANTS
 {
 #select catch variables for analysis
@@ -221,7 +224,7 @@ for (x in 1:nrow(participants_complete)) {
   trialdata$similarity[trialdata$similarity == -2] <-2
   trialdata$similarity[trialdata$similarity == -3] <-1
   trialdata$similarity[trialdata$similarity == -4] <-0 
-  }
+}
 ## HISTOGRAM OF ANSWERS PER PARTICIPANTS TO CHECK DISTRIBUTION ACROSS SCALE
 {
 #could modify y axis to show min/max count for better data/ink ratio
@@ -822,7 +825,7 @@ for (x in 1:nrow(mean_asymmetry)) {  #makes a temporary dataframe with all the s
 ggplot(colourpairs) +
     aes(x = hex1, y = hex2, fill = mean.asymmetry) +
     geom_raster() +
-    scale_fill_gradient2(low ="red", high= "blue", mid ="white", midpoint= 0, na.value = "green") +
+    scale_fill_gradient2(low ="red", high= "white", mid ="white", midpoint= 0, na.value = "green") +
     scale_x_discrete(labels=block_rep) + scale_y_discrete(labels=block_rep) +
     theme_pubr()+
     theme(legend.position = "left")+
@@ -924,8 +927,6 @@ ggplot(colourpairs) +
   theme_pubr()+
   ylim(0,.1)
 
-
-
 #p-testing CORRECTED --- WIP 
 colourpairs$p.adjust <- NA
 colourpairs$p.adjust <- p.adjust(colourpairs$p, method = "holm", n= length(colourpairs$p))
@@ -952,3 +953,77 @@ ggplot(mean_variance) +
   geom_smooth(span = 0.75) +
   labs(x = "Times tested", y = "St dev in similarity") +
   theme_pubr()
+
+
+#### MATRIX WITH ASYMMETRY VALUES ####
+{# Create blank matrix 
+  asym.matrix <- matrix(NA, ncol = 93, nrow = 93)
+  # setting all give colours as both row and column names
+  colnames(asym.matrix) <- rownames(asym.matrix) <- unique(trialdata$hex1)
+  
+  # fill matrix with asymmetry index values
+  matrix.df.fill <- function(data,matrix.df){
+    for(i in 1:nrow(data)){
+      row <- data[i,]
+      matrix.df[row$hex1,row$hex2] <- row$mean.asymmetry
+    }
+    return(matrix.df)
+  }
+  
+  asym.data_vars <- c("hex1", "hex2", "mean.asymmetry")
+  asym.data <- colourpairs[asym.data_vars]
+  
+  asym.matrix <- matrix.df.fill(asym.data,asym.matrix)
+  asym.matrix.df <- as.data.frame(asym.matrix)
+  }
+
+#calculate mean of each column
+color.names <- colnames(asym.matrix.df) #get list of colours
+asym_percolour.df<- as.data.frame(color.names) #make it a dataframe
+asym_percolour.df$average.asymmetry <-colMeans(asym.matrix.df) # add new variable to dataframe with mean of each column in matrix
+asym_percolour.df$color.names <- with(asym_percolour.df, factor(color.names, levels = row.facs)) #make colour variable as factor for graphing
+
+#calculate variance of each column
+asym_percolour.df$Variance <- colVars(asym.matrix)
+
+#replace NAs with zero for graphing 
+asym_percolour.df[is.na(asym_percolour.df)] = 0
+
+#visualise average asymmetry per column 
+ggplot(asym_percolour.df)+
+  aes(x = color.names, y= average.asymmetry, fill= color.names)+
+  theme_pubr()+
+  geom_col()+
+  scale_x_discrete(labels=block_rep)+
+  scale_fill_manual(values =c(row.facs))+
+  guides(fill="none")+
+  theme(axis.title.x=element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank())+ 
+  geom_hline(aes(yintercept =0))
+
+#visualise asymmetry variance per column 
+ggplot(asym_percolour.df)+
+  aes(x = color.names, y= Variance, fill= color.names)+
+  theme_pubr()+
+  geom_col()+
+  scale_x_discrete(labels=block_rep)+
+  scale_fill_manual(values =c(row.facs))+
+  guides(fill="none")+
+  theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))
+
+#Calculating rough tscore with population equal to 92 colours 
+asym_percolour.df$t <- NA
+asym_percolour.df$t <- asym_percolour.df$average.asymmetry/(sqrt(asym_percolour.df$Variance)/sqrt(92))
+asym_percolour.df$t <- abs(asym_percolour.df$t)
+asym_percolour.df[is.na(asym_percolour.df)] = 0 #for graphing
+
+#visualise asymmetry tscore per column 
+ggplot(asym_percolour.df)+
+  aes(x = color.names, y= t, fill= color.names)+
+  theme_pubr()+
+  geom_col()+
+  scale_x_discrete(labels=block_rep)+
+  scale_fill_manual(values =c(row.facs))+
+  guides(fill="none")+
+  theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))

@@ -64,21 +64,6 @@ colourpairs$var.asymmetry<- as.numeric(colourpairs$var.asymmetry) #make it numer
 
 colourpairs$sem.asymmetry <- sqrt(colourpairs$var.asymmetry)/sqrt(colourpairs$pair_hitcount)
 
-#MAKE DATAFRAME WITH ASYMMETRY PER COLOUR PAIR (AB=BA)
-{#gathering AsIn values using a for loop
-  mean_asymmetry<-mean_variance
-  mean_asymmetry$meanas<-NA
-  
-  for (x in 1:nrow(mean_asymmetry)) {  #makes a temporary dataframe with all the similarity ratings for one colourpair (x = row in mean_similarity ie. one per colourpair)
-    a<-subset(AsIndata_wide,AsIndata_wide$hex1.first==mean_asymmetry$hex1[x] & AsIndata_wide$hex1.second==mean_asymmetry$hex2[x], c(AsIn)) #similarity with exact hex match
-    b<-subset(AsIndata_wide,AsIndata_wide$hex1.first==mean_asymmetry$hex2[x] & AsIndata_wide$hex1.second==mean_asymmetry$hex1[x], c(AsIn)) #similarity with flipped hex order
-    c<-rbind(a, b) #all similarty ratings for colour pair x
-    mean_asymmetry$meanas[x]<-mean(as.matrix(c))
-  }
-  
-  #mean_asymmetry$hex1 <- with(mean_asymmetry, factor(hex1, levels = row.facs))
-  #mean_asymmetry$hex2 <- with(mean_asymmetry, factor(hex2, levels = row.facs))
-}
 
 #MAKE ASYMMETRY MATRIX ALL PARTICIPANTS -- To be refined
 {
@@ -87,7 +72,7 @@ colourpairs$sem.asymmetry <- sqrt(colourpairs$var.asymmetry)/sqrt(colourpairs$pa
 ggplot(colourpairs) +
     aes(x = hex1, y = hex2, fill = mean.asymmetry) +
     geom_raster() +
-    scale_fill_gradient2(low ="red", high= "blue", mid ="white", midpoint= 0, na.value = "green") + scale_x_discrete(labels=block_rep) + scale_y_discrete(labels=block_rep) +
+    scale_fill_gradient2(low ="red", high= "blue", mid ="grey", midpoint= 0, na.value = "green") + scale_x_discrete(labels=block_rep) + scale_y_discrete(labels=block_rep) +
     theme_pubr()+
     theme(legend.position = "left")+
     theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))+
