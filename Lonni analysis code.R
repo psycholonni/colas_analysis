@@ -116,7 +116,7 @@ data <- bind_rows(pb.data, data, pilot.data, waveiv.data)
 ###DATA CLEANING###
 ###################
 
-#screening participants with less framerate too low
+#screening participants with framerate too low
 data <- data[data$frameRate>29,]
 
 #MAKE CATCHDATA DATAFRAME WITH ONE ROW PER CATCH TRIAL, FOR ALL PARTICIPANTS
@@ -407,18 +407,7 @@ List_scatterplot <- lapply(pass_correlation$participant, get_doublepass_scatterp
 #save median
 medianpass<- round(median(pass_correlation$pearson), 2)
 
-#save plot
-correlation_histogram <- hist(pass_correlation$pearson,
-                              main="Histogram of double pass correlations (rho)", 
-                              sub=paste("median=", medianpass),
-                              xlab="doublepasscorrelation(rho)",
-                              border="steelblue",
-                              col="blue",
-                              xlim=c(-.5,1),
-                              las=1,
-                              breaks=20)
-
-#Same plot as above (hist of dp corr) with Lonni's viz
+#Histogram of all participants' dp correlation
 ggplot(pass_correlation, aes(pearson)) +
   geom_histogram(fill= "#63B8FF") +
   scale_x_continuous(breaks = as.numeric(round(quantile(pass_correlation$pearson),digits = 2))) + 
@@ -634,10 +623,6 @@ colours_disordered <- rename(colours_disordered, colour = 'unique(colourpairs$he
 row.facs <- row.factors(colours_disordered,row.cor(group.mean.mat.df))
 }
 
-#APPLY COLOUR FACTORS TO COLOURPAIRS DATAFRAME
-colourpairs$hex1 <- with(colourpairs, factor(hex1, levels = row.facs))
-colourpairs$hex2 <- with(colourpairs, factor(hex2, levels = row.facs))
-
 #VISUALISE MEAN SIMILARITY
 {
 #Rainbow  
@@ -673,7 +658,7 @@ for (x in 1:nrow(mean_similarity)) {  #makes a temporary dataframe with all the 
   mean_similarity$meanas[x]<-mean(as.matrix(c))
 }
 }
-#SIMILARITY MATRIX
+#SIMILARITY MATRIX VISUALISATION
 {ggplot(mean_similarity) +
   aes(x = hex1, y = hex2, fill = mean) +
   geom_raster() +
@@ -735,7 +720,7 @@ sd(mean_variance$var)
 #standard_error <- function(x) sd(x) / sqrt(length(x))
 mean_variance$sem <- sqrt(mean_variance$var)/sqrt(mean_variance$pair_hitcount)
 
-#MAKE DATAFRAME WITH ASYMMETRY INDEX (AsIn) for each participant
+#MAKE DATAFRAME WITH ASYMMETRY INDEX (AsIn) for each participant FULL FORMULA
 {
 #Calculating absolute difference between first and second pass similatirity ratings  
 trialdata_passes$abs <- abs(trialdata_passes$firstpass_similarity-trialdata_passes$secondpass_similarity) 
@@ -764,6 +749,36 @@ AsIndata_wide$AsIn13 <- (AsIndata_wide$mean13 - AsIndata_wide$mean24)/
 #calculating Asymmetry Index as per Nao's formula (M24 -M13)/((A13+A24)+1)
 AsIndata_wide$AsIn24 <- (AsIndata_wide$mean24 - AsIndata_wide$mean13)/
   ((AsIndata_wide$abs.first + AsIndata_wide$abs.second) + 1)
+}
+
+#MAKE DATAFRAME WITH ASYMMETRY INDEX (AsIn) for each participant SIMPLIFIED FORMULA 
+{
+  #Calculating absolute difference between first and second pass similatirity ratings  
+  trialdata_passes$abs <- abs(trialdata_passes$firstpass_similarity-trialdata_passes$secondpass_similarity) 
+  #Creating unique ID for each pair by combining participant ID and Colourpair 
+  trialdata_passes$Colourpairperparticipant <- str_c(trialdata_passes$participant, '',trialdata_passes$Colourpair)
+  
+  #selecting variables for asymmetry analysis
+  AsIndata_vars <- c("participant", "Colourpair", "Temporder", "hex1", "hex2", "similarity", "abs", "Colourpairperparticipant")
+  #making dataframe
+  AsIndata <- trialdata_passes[AsIndata_vars]
+  
+  #changing to wide so that One row per colour pair per participant (4 ratings per row, first and second pass and reverse order)
+  AsIndata_wide <- reshape(AsIndata, idvar = "Colourpairperparticipant", timevar = "Temporder", direction = "wide")
+  
+  #renaming because temporder first second makes it confusing with first/second pass
+  names(AsIndata_wide)[names(AsIndata_wide) == "similarity.first"] <- "mean13" #similarity.first was the mean of the pair for the first temporder so mean13
+  names(AsIndata_wide)[names(AsIndata_wide) == "similarity.second"] <- "mean24"
+  
+  #Create unique pair name by concatening first colour with second colour
+  AsIndata_wide$pair13 <- str_c(AsIndata_wide$hex1.first, '',AsIndata_wide$hex2.first)
+  AsIndata_wide$pair24 <- str_c(AsIndata_wide$hex1.second, '',AsIndata_wide$hex2.second)
+  
+  #calculating Asymmetry Index as per Simplified formula (M13 -M24)
+  AsIndata_wide$AsIn13 <- (AsIndata_wide$mean13 - AsIndata_wide$mean24)
+  
+  #calculating Asymmetry Index as per Simplified formula (M24 -M13)
+  AsIndata_wide$AsIn24 <- (AsIndata_wide$mean24 - AsIndata_wide$mean13)
 }
 
 #GET AsIn in Colourpairs DATAFRAME
@@ -802,7 +817,12 @@ colourpairs$var.asymmetry<- as.numeric(colourpairs$var.asymmetry) #make it numer
 
 colourpairs$sem.asymmetry <- sqrt(colourpairs$var.asymmetry)/sqrt(colourpairs$pair_hitcount)
 
-#MAKE DATAFRAME WITH ASYMMETRY PER COLOUR PAIR (AB=BA)
+## T-TESTING UNCORRECTED 
+colourpairs$t <- NA
+colourpairs$t <- colourpairs$mean.asymmetry/(sqrt(colourpairs$var.asymmetry)/sqrt(colourpairs$pair_hitcount))
+
+
+#MAKE DATAFRAME WITH ASYMMETRY PER COLOUR PAIR (AB=BA) - NOT IN USE
 {#gathering AsIn values using a for loop
 mean_asymmetry<-mean_variance
 mean_asymmetry$meanas<-NA
@@ -818,6 +838,48 @@ for (x in 1:nrow(mean_asymmetry)) {  #makes a temporary dataframe with all the s
 #mean_asymmetry$hex2 <- with(mean_asymmetry, factor(hex2, levels = row.facs))
 }
 
+#### MATRIX WITH ASYMMETRY VALUES #### DOES NOT WORK IF FACTORS ALREADY APPLIED
+{# Create blank matrix 
+  asym.matrix <- matrix(NA, ncol = 93, nrow = 93)
+  # setting all give colours as both row and column names
+  colnames(asym.matrix) <- rownames(asym.matrix) <- unique(trialdata$hex1)
+  
+  # fill matrix with asymmetry index values
+  matrix.df.fill <- function(data,matrix.df){
+    for(i in 1:nrow(data)){
+      row <- data[i,]
+      matrix.df[row$hex1,row$hex2] <- row$mean.asymmetry
+    }
+    return(matrix.df)
+  }
+  
+  asym.data_vars <- c("hex1", "hex2", "mean.asymmetry")
+  asym.data <- colourpairs[asym.data_vars]
+  
+  asym.matrix <- matrix.df.fill(asym.data,asym.matrix)
+  asym.matrix.df <- as.data.frame(asym.matrix)
+}
+
+#calculate mean of each column
+color.names <- colnames(asym.matrix.df) #get list of colours
+asym_percolour.df<- as.data.frame(color.names) #make it a dataframe
+asym_percolour.df$average.asymmetry <-colMeans(asym.matrix.df) # add new variable to dataframe with mean of each column in matrix
+
+#calculate variance of each column
+asym_percolour.df$Variance <- colVars(asym.matrix)
+
+#replace NAs with zero for graphing 
+asym_percolour.df[is.na(asym_percolour.df)] = 0
+
+
+###################
+###VISUALISATION###
+###################
+
+#APPLY COLOUR FACTORS TO COLOURPAIRS DATAFRAME
+colourpairs$hex1 <- with(colourpairs, factor(hex1, levels = row.facs))
+colourpairs$hex2 <- with(colourpairs, factor(hex2, levels = row.facs))
+
 #MAKE ASYMMETRY MATRIX ALL PARTICIPANTS -- To be refined
 {
 
@@ -825,13 +887,14 @@ for (x in 1:nrow(mean_asymmetry)) {  #makes a temporary dataframe with all the s
 ggplot(colourpairs) +
     aes(x = hex1, y = hex2, fill = mean.asymmetry) +
     geom_raster() +
-    scale_fill_gradient2(low ="red", high= "white", mid ="white", midpoint= 0, na.value = "green") +
-    scale_x_discrete(labels=block_rep) + scale_y_discrete(labels=block_rep) +
+    scale_fill_distiller(palette = "PiYG") +
     theme_pubr()+
     theme(legend.position = "left")+
+    scale_x_discrete(labels=block_rep) + scale_y_discrete(labels=block_rep) +
     theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))+
     theme(axis.text.y = element_text(size= 5, colour=row.facs))
-
+#scale_fill_viridis_b(option = "plasma")
+#scale_fill_gradient2(low ="red", high= "blue", mid ="white", midpoint= 0, na.value = "green") 
   }
 
 #FUNNEL PLOT Asymmetry x Hitcount
@@ -871,9 +934,6 @@ ggplot(colourpairs)+
   theme_pubr()+
   geom_vline(xintercept = 0, colour ="grey")
 
-## T-TESTING UNCORRECTED --- WIP
-colourpairs$t <- NA
-colourpairs$t <- colourpairs$mean.asymmetry/(sqrt(colourpairs$var.asymmetry)/sqrt(colourpairs$pair_hitcount))
 
 #t-score matrix
 ggplot(colourpairs)+
@@ -955,7 +1015,7 @@ ggplot(mean_variance) +
   theme_pubr()
 
 
-#### MATRIX WITH ASYMMETRY VALUES ####
+#### MATRIX WITH ASYMMETRY VALUES #### DOES NOT WORK IF FACTORS ALREADY APPLIED
 {# Create blank matrix 
   asym.matrix <- matrix(NA, ncol = 93, nrow = 93)
   # setting all give colours as both row and column names
@@ -981,6 +1041,8 @@ ggplot(mean_variance) +
 color.names <- colnames(asym.matrix.df) #get list of colours
 asym_percolour.df<- as.data.frame(color.names) #make it a dataframe
 asym_percolour.df$average.asymmetry <-colMeans(asym.matrix.df) # add new variable to dataframe with mean of each column in matrix
+
+#apply factors to asym_percolour dataframe
 asym_percolour.df$color.names <- with(asym_percolour.df, factor(color.names, levels = row.facs)) #make colour variable as factor for graphing
 
 #calculate variance of each column
@@ -1015,7 +1077,7 @@ ggplot(asym_percolour.df)+
 #Calculating rough tscore with population equal to 92 colours 
 asym_percolour.df$t <- NA
 asym_percolour.df$t <- asym_percolour.df$average.asymmetry/(sqrt(asym_percolour.df$Variance)/sqrt(92))
-asym_percolour.df$t <- abs(asym_percolour.df$t)
+#asym_percolour.df$t <- abs(asym_percolour.df$t)
 asym_percolour.df[is.na(asym_percolour.df)] = 0 #for graphing
 
 #visualise asymmetry tscore per column 
@@ -1026,4 +1088,64 @@ ggplot(asym_percolour.df)+
   scale_x_discrete(labels=block_rep)+
   scale_fill_manual(values =c(row.facs))+
   guides(fill="none")+
+  theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))
+
+#Isolating one colour for further analysis
+single.colour.df <- colourpairs[colourpairs$hex1=="#FF8F00",] #subsetting
+mean(single.colour.df$mean.asymmetry) #calculating mean for sanity check 
+var(single.colour.df$mean.asymmetry) #caculating variance for sanity check 
+mean(single.colour.df$mean.asymmetry)/(sqrt(var(single.colour.df$mean.asymmetry))/sqrt(92)) #calculating tscore for sanity check 
+
+single.colour.df <- as.data.frame(single.colour.df)
+single.colour.df$hex2 <- with(single.colour.df, factor(hex2, levels = row.facs)) #make colour variable as factor for graphing
+
+#distribution of asymmetry values for one colour
+ggplot(single.colour.df)+
+  aes(mean.asymmetry)+
+  geom_histogram(fill= unique(single.colour.df$hex1))+ #make colour of histogram the colour plotted
+  scale_x_continuous(breaks = as.numeric(round(quantile(single.colour.df$mean.asymmetry),digits = 2)))+ #change axis to display quantile value instead of arbitrary values
+  labs(x = paste(unique(single.colour.df$hex1)))+
+  theme_pubr()+
+  theme(axis.text.x = element_text(angle = 45)) #angle the text to make easier to read, not yet working
+
+#Visualisation of asymmetry index for one colour only against all other colours to see impact of hitcount
+ggplot(single.colour.df) +
+  aes(x = hex2, fill = pair_hitcount, y = mean.asymmetry) +
+  geom_col() +
+  scale_fill_viridis_c(option = "plasma", direction = 1) +
+  labs(
+    x = "Colour compared to",
+    y = "Asymmetry Index (averaged across participants)",
+    title = paste("Asymmetries of ", unique(single.colour.df$hex1), sep = ""),
+    fill = "Number of participants") +
+  theme_pubr()+
+  scale_x_discrete(labels=block_rep)+
+  theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))
+
+#Visualisation of asymmetry index for one colour only against all other colours to see impact of SEM
+ggplot(single.colour.df) +
+  aes(x = hex2, fill = sem.asymmetry, y = mean.asymmetry) +
+  geom_col() +
+  scale_fill_viridis_c(option = "plasma", direction = 1) +
+  labs(
+    x = "Colour compared to",
+    y = "Asymmetry Index (averaged across participants)",
+    title = paste("Asymmetries of ", unique(single.colour.df$hex1), sep = ""),
+    fill = "SEM asymmetry") +
+  theme_pubr()+
+  scale_x_discrete(labels=block_rep)+
+  theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))
+
+#Visualisation of asymmetry index for one colour only against all other colours to see Significance (tscore)
+ggplot(single.colour.df) +
+  aes(x = hex2, fill = t, y = mean.asymmetry) +
+  geom_col() +
+  scale_fill_viridis_c(option = "plasma", direction = 1) +
+  labs(
+    x = "Colour compared to",
+    y = "Asymmetry Index (averaged across participants)",
+    title = paste("Asymmetries of ", unique(single.colour.df$hex1), sep = ""),
+    fill = "t-score") +
+  theme_pubr()+
+  scale_x_discrete(labels=block_rep)+
   theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))

@@ -1,4 +1,4 @@
-#MAKE DATAFRAME WITH ASYMMETRY INDEX (AsIn) for each participant
+#MAKE DATAFRAME WITH ASYMMETRY INDEX (AsIn) for each participant SIMPLIFIED FORMULA 
 {
   #Calculating absolute difference between first and second pass similatirity ratings  
   trialdata_passes$abs <- abs(trialdata_passes$firstpass_similarity-trialdata_passes$secondpass_similarity) 
@@ -21,10 +21,10 @@
   AsIndata_wide$pair13 <- str_c(AsIndata_wide$hex1.first, '',AsIndata_wide$hex2.first)
   AsIndata_wide$pair24 <- str_c(AsIndata_wide$hex1.second, '',AsIndata_wide$hex2.second)
   
-  #calculating Asymmetry Index as per Nao's formula (M13 -M24)/((A13+A24)+1)
+  #calculating Asymmetry Index as per Simplified formula (M13 -M24)
   AsIndata_wide$AsIn13 <- (AsIndata_wide$mean13 - AsIndata_wide$mean24)
    
-  #calculating Asymmetry Index as per Nao's formula (M24 -M13)/((A13+A24)+1)
+  #calculating Asymmetry Index as per Simplified formula (M24 -M13)
   AsIndata_wide$AsIn24 <- (AsIndata_wide$mean24 - AsIndata_wide$mean13)
 }
 
