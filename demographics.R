@@ -65,3 +65,25 @@ demographics %>%
 
 # get proportion of males/females as well as students 
 table(demographics$Sex)
+
+get_mean.rt<- function(z){ 
+  temp_df <- subset(trialdata,participant==z)
+  mean.rt<- mean(temp_df$response_time)
+  return(mean.rt)
+}
+
+participants_complete$rt <-lapply(participants_complete$participant_id, get_mean.rt)
+participants_complete$rt <- as.numeric(participants_complete$rt)
+
+catch_perperson$score_decimal <- as.numeric(catch_perperson$score_decimal)
+catch_perperson$response_time <- as.numeric(catch_perperson$response_time)
+ggplot(catch_perperson, aes(response_time, score_decimal))+
+  geom_point()+
+  geom_hline(yintercept = .77)+
+  theme_pubr()
+
+ggplot(catch_perperson, aes(response_time, score_decimal))+
+   geom_point()+
+   geom_hline(yintercept = .8)+
+   theme_pubr()+
+   coord_cartesian(xlim = c(0,5))

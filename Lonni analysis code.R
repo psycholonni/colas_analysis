@@ -170,6 +170,22 @@ get_catchresponsetime<- function(z){
   return(catchresponsetime)
 }
 catch_perperson$response_time<-lapply(catch_perperson$participant, get_catchresponsetime)
+
+
+}
+#HISTOGRAM OF DISTRIBUTION OF CATCH SCORES 
+{#making decimal score numeric so it can be plotted
+catch_perperson$score_decimal <- as.numeric(catch_perperson$score_decimal)
+#making decimal a percentage just so plot is easier to understand
+catch_perperson$percent <- catch_perperson$score_decimal*100
+#plot
+ggplot(catch_perperson) +
+  aes(x = percent) +
+  geom_histogram(binwidth= 20,fill = "#016450") +
+  labs(x = "Percentage correct",
+        y = "Frequency (number of participants)") +
+  scale_x_continuous(breaks = seq(0,100, by= 20))+
+  theme_pubr()
 }
 #MAKING TRIALDATA DATAFRAME WITH ONE ROW PER TRIAL, FOR ALL PARTICIPANTS
 {
@@ -234,7 +250,12 @@ ggplot(trialdata) +
  geom_bar(position="dodge") +
  theme_minimal()+
     guides(fill="none")
-
+ggplot(trialdata) +
+    aes(x = similarity) +
+    geom_bar(fill= "#016c59")+
+    theme_pubr()+
+  labs(x="Similarity rating", y= "Sum of trials")+
+  scale_x_continuous(breaks = c(0:7))
 
 #One facet per participant
 #ggplot(trialdata) +
@@ -560,7 +581,7 @@ ggplot(colourpairs) +
   aes(x= pair_hitcount) +
   geom_bar(fill= "#016450") +
   theme_pubr()+
-  labs(y='Frequency', x='Times tested')
+  labs(y='Frequency(number of pairs)', x='Times tested')
 }
 #hitcount descriptives
 summary(colourpairs$pair_hitcount)
