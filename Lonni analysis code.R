@@ -38,7 +38,9 @@ library(farver)
 library(matrixStats) %>% shhh
 library(plotrix) %>% shhh
 library(JWileymisc)
-library(readxl)}
+library(readxl)
+library(visreg)
+  }
 
 setwd("~/thesis/colas_analysis")
 
@@ -182,10 +184,10 @@ catch_perperson$percent <- catch_perperson$score_decimal*100
 ggplot(catch_perperson) +
   aes(x = percent) +
   geom_histogram(binwidth= 20,fill = "#016450") +
-  labs(x = "Percentage correct",
+  labs(x = "Percentage of correct answers",
         y = "Frequency (number of participants)") +
   scale_x_continuous(breaks = seq(0,100, by= 20))+
-  theme_pubr()
+  theme_pubr(20)
 }
 #MAKING TRIALDATA DATAFRAME WITH ONE ROW PER TRIAL, FOR ALL PARTICIPANTS
 {
@@ -433,7 +435,7 @@ medianpass<- round(median(pass_correlation$pearson), 2)
 ggplot(pass_correlation, aes(pearson)) +
   geom_histogram(binwidth = .007, fill= "#016c59") +
   scale_x_continuous(breaks = as.numeric(round(quantile(pass_correlation$pearson),digits = 2))) + 
-    theme_pubr() +   
+    theme_pubr(20) +   
   theme(axis.line = element_blank())+
   geom_rangeframe()+
   labs(x="Double-pass correlation (rho)",
@@ -458,7 +460,6 @@ trialdata <- subset(trialdata, !participant %in% outsiders$participant)
 #############################
 ###ISHIHARA COLOUR TESTING###
 #############################
-
 {
 #MAKE DATAFRAME WITH ONE ROW PER ANSWER
 {
@@ -552,42 +553,19 @@ trialdata_passes$pairofcolour <- str_c(trialdata_passes$hex1, '',trialdata_passe
 }
 
 #Counting times a colour pair was tested
-get_pair_hitcount<-function(x){ #get number of hits on pair of colour (x = colourpair)
+{get_pair_hitcount<-function(x){ #get number of hits on pair of colour (x = colourpair)
   pair_hitcount<-sum(trialdata_passes$pairofcolour == x)
   return(pair_hitcount)
 }
 colourpairs$pair_hitcount <-lapply(colourpairs$pair, get_pair_hitcount)
-
 colourpairs$pair_hitcount <- as.integer(colourpairs$pair_hitcount)
 
-#MATRIX PLOT OF HITS FOR COLOUR
-{
-#heatmap of hitcount (the more a pair is tested, the 'hotter' it gets)
-ggplot(colourpairs) +
-  aes(x = hex1, y = hex2, fill= pair_hitcount) +
-  geom_raster() +
-  theme_pubr()+
-  theme(axis.text.x=element_text(angle=90,hjust=1, size=6, colour = sort(unique(colourpairs$hex1))),
-        axis.text.y = element_text(size = 6, colour = sort(unique(colourpairs$hex1))))+
-  theme(legend.position = "left")+
-  scale_fill_gradient(name= "Times tested",low = "grey", high = "black", na.value = "green")+
-  labs(x= "Colour presented first", y= "Colour presented second")
-  
-
-#ggplot(colourpairs) + aes(x = hex1, y = hex2, fill= pair_hitcount) + geom_raster() +  theme_pubr()+  theme(axis.text.x=element_text(angle=90,hjust=1, size=7), axis.text.y = element_text(size = 7))
-
-#distribution of hitcounts
-ggplot(colourpairs) +
-  aes(x= pair_hitcount) +
-  geom_bar(fill= "#016450") +
-  theme_pubr()+
-  labs(y='Frequency(number of pairs)', x='Times tested')
-}
 #hitcount descriptives
 summary(colourpairs$pair_hitcount)
 sd(colourpairs$pair_hitcount)
+}
 
-#MAKE DATAFRAME WITH MEAN SIMILARITY PER COLOUR PAIR MAINTAINING DIRECTIONNALITY (AB=/=BA)
+#ADDING MEAN SIMILARITY PER COLOUR PAIR MAINTAINING DIRECTIONNALITY (AB=/=BA)
 {
 #mean_similarity<-colourpairs
 #mean_similarity$mean<-NA
@@ -606,6 +584,16 @@ get_mean_similarity <- function(z){
 colourpairs$mean.similarity<-lapply(colourpairs$pair, get_mean_similarity) 
 colourpairs$mean.similarity<- as.numeric(colourpairs$mean.similarity)
 }
+#ADDING MEAN VARIANCE PER COLOUR PAIR MAINTAINING DIRECTIONNALITY (AB=/=BA)
+{get_similarity_variance <- function(z){ 
+    a<-subset(trialdata_passes, pairofcolour==z) #similarity with exact hex match
+    variance<-var(a$similarity)
+    return(variance)
+  }
+  colourpairs$variance.similarity<-lapply(colourpairs$pair, get_similarity_variance) 
+  colourpairs$variance.similarity<- as.numeric(colourpairs$variance.similarity)
+}
+
 #DO NOT USE -- FACTORS SET AT TOP OF SCRIPT-- MAKING COLOURS AS FACTORS FOR GRAPHING
 {# Create blank matrix 
 color.mat.df <- matrix(NA, ncol = 93, nrow = 93)
@@ -647,7 +635,6 @@ colours_disordered <- rename(colours_disordered, colour = 'unique(colourpairs$he
 
 row.facs <- row.factors(colours_disordered,row.cor(group.mean.mat.df))
 }
-
 #MAKE DATAFRAME WITH MEAN SIMILARITY PER COLOUR PAIR (AB==BA) - Not in Use
 {mean_similarity<-colourpairs
 mean_similarity$meanas<-NA
@@ -668,7 +655,6 @@ for (x in 1:nrow(mean_similarity)) {  #makes a temporary dataframe with all the 
   theme(axis.text.x= element_text(size= 7, angle=90, colour=sort(unique(mean_similarity$hex1))))+
   theme(axis.text.y = element_text(size= 7, colour=sort(unique(mean_similarity$hex2))))
 }
-
 #MAKE DATAFRAME WITH MEDIAN SIMILARITY PER COLOUR PAIR (AB==BA) - Not in Use
 {
 median_similarity<-colourpairs
@@ -873,48 +859,282 @@ asym_percolour.df$Variance <- colVars(asym.matrix)
 #replace NAs with zero for graphing 
 asym_percolour.df[is.na(asym_percolour.df)] = 0
 
+#RESCALING THE DATA TO DISSIMILARITY
+{colourpairs$pair.reversed <- str_c(colourpairs$hex2, '',colourpairs$hex1)
+
+get_mean.sim <- function(z){ 
+  a<-subset(colourpairs, pair==z) #getting all the instance in pair matching the pair of hexcodes
+  a<- a["mean.similarity"] #only keeping the similarity score of interest 
+  b<-subset(colourpairs, pair.reversed==z) #repeating with pair reversed 
+  b<- b["mean.similarity"] # again keeping only scores of reversed pairs
+  c <-rbind(a, b) #all similarity ratings for one combination 
+  mean.sim <- mean(c$mean.similarity)
+  return(mean.sim)
+}
+
+colourpairs$mean.sim<-lapply(colourpairs$pair, get_mean.sim) 
+colourpairs$mean.sim<- as.numeric(colourpairs$mean.sim)
+colourpairs$mean.dissim <- 7- colourpairs$mean.sim
+}
+## MAKE DISSIMILARITY MATRIX 
+{# Create blank matrix 
+dissim.matrix <- matrix(3.5, ncol = 93, nrow = 93)
+# setting all give colours as both row and column names
+colnames(dissim.matrix) <- rownames(dissim.matrix) <- unique(trialdata$hex1)
+
+# fill matrix with similarity values
+matrix.df.fill <- function(data,matrix.df){
+  for(i in 1:nrow(data)){
+    row <- data[i,]
+    matrix.df[row$hex1,row$hex2] <- row$mean.dissim
+  }
+  return(matrix.df)
+}
+
+dissim.data_vars <- c("hex1", "hex2", "mean.dissim")
+dissim.data <- colourpairs[dissim.data_vars]
+dissim.data$mean.dissim <- as.numeric(dissim.data$mean.dissim)
+
+dissim.matrix <- matrix.df.fill(dissim.data,dissim.matrix)
+dissim.matrix.df <- as.data.frame(dissim.matrix)
+}
+#MDS 2d
+{fit <- cmdscale(dissim.matrix.df, eig= TRUE, k =2)
+  x <- fit$points[, 1]
+  y <- fit$points[, 2]
+  
+  fit.2df<- data.frame(fit$points)
+  fit.2df$colour <- rownames(fit.2df)
+  fit.2df$colour  <- with(fit.2df, factor(colour, levels = row.facs))
+  
+  fit.plot <- ggplot(data = fit.2df, aes(x = X1, y = X2, color=colour)) + geom_point() +
+    scale_color_manual(values = c(row.facs))+
+    guides(col = "none") +
+    theme_pubr()
+  fit.plot
+  plot(x, y)
+}
+
+#3d plot
+{fit <- cmdscale(dissim.matrix.df, eig= TRUE, k =3)
+x <- fit$points[, 1]
+y <- fit$points[, 2]
+z <- fit$points[, 3]
+
+colors <- colnames(dissim.matrix)
+
+plot3d(x,y,z, col=colors, size = 20)
+}
+
+#MAKE DATAFRAME WITH MDS COORDINATES
+{mds_coord <- as.data.frame(colors)
+mds_coord$x <- x
+mds_coord$y <- y
+mds_coord$z <- z
+
+#calculate distance in MDS 3d 
+get_mds.distance <- function(c1,c2){ 
+  a <-subset(mds_coord, colors == c1) #coord colour 1
+  b <-subset(mds_coord, colors == c2) #coord colour 2
+  mds.distance <- sqrt((a$x-b$x)^2+(a$y-b$y)^2+(a$z-b$z)^2)
+  return(mds.distance)
+}
+colourpairs$mds.distance <- apply(colourpairs,1, function(x) get_mds.distance(x[1], x[2])) #apply function
+colourpairs$mds.distance<- as.numeric(colourpairs$mds.distance) #make it numeric
+}
+
+################
+###REGRESSION###
+################
+{
+#Knocking down diagonal 
+colourpairs$diagonal <- colourpairs$hex1==colourpairs$hex2  
+
+regr.data <- colourpairs[colourpairs$diagonal==FALSE,]
+
+#linear model 
+m1 <- lm(abs(mean.asymmetry)~ mds.distance, 
+         data= regr.data)
+summary(m1)
+
+md <- modelDiagnostics(m1, ev.perc=.005)
+plot(md, ncol=2 , ask= FALSE)
+
+visreg(m1, xvar= "mds.distance", gg= TRUE)+
+  theme_pubr()
+#quadratic model
+m2 <- lm(abs(mean.asymmetry)~ poly(mds.distance,2), 
+         data= regr.data)
+summary(m2)
+md2 <- modelDiagnostics(m2, ev.perc=.005)
+plot(md2, ncol=2 , ask= FALSE)
+
+#linear vs quadratic comparison
+AIC(m1, m2)
+BIC(m1,m2)
+
+#cubic model
+m3 <- lm(abs(mean.asymmetry)~ poly(mds.distance,3), 
+         data= regr.data)
+summary(m3)
+md3 <- modelDiagnostics(m3, ev.perc=.005)
+plot(md3, ncol=2 , ask= FALSE)
+
+#quadratic vs cubic comparison
+AIC(m2, m3)
+BIC(m2,m3)
+
+#4th model
+m4 <- lm(abs(mean.asymmetry)~ poly(mds.distance,4), 
+         data= regr.data)
+summary(m4)
+md4 <- modelDiagnostics(m4, ev.perc=.005)
+plot(md4, ncol=2 , ask= FALSE)
+
+#cubic vs 4th comparison
+AIC(m3, m4)
+BIC(m3,m4)
+
+visreg(m3, xvar= "mds.distance", gg= TRUE)+
+  scale_x_continuous(breaks = seq(0,7,by=1))+
+  labs(x= "MDS distance", y= "Asymmetry (absolute mean)")+
+  theme_pubr()
+
+
+##MULTIPLE REGRESSION 
+#Adding similarity and its variance to model to control
+mlr <- lm(abs(mean.asymmetry)~ poly(mds.distance,3) + mean.similarity + variance.similarity, 
+          data = regr.data)
+summary(mlr)
+
+mlr <- lm(abs(mean.asymmetry)~ poly(mds.distance,1) + mean.similarity + variance.similarity, 
+          data = regr.data)
+summary(mlr)
+
+#Adding interaction term
+mlr.interaction <- lm(abs(mean.asymmetry)~ mds.distance + mean.similarity + variance.similarity+
+                        mds.distance*mean.similarity*variance.similarity, 
+                      data = regr.data)
+summary(mlr.interaction)
+
+mlr.poly.interaction <- lm(abs(mean.asymmetry)~ poly(mds.distance,3) + mean.similarity + variance.similarity+
+                             poly(mds.distance,3)*mean.similarity*variance.similarity, 
+                           data = regr.data)
+summary(mlr.poly.interaction)
+modelDiagnostics(mlr.interaction) %>% plot(ncol=2, ask=FALSE)
+
+AIC(mlr.interaction, mlr.poly.interaction)
+BIC(mlr.interaction, mlr.poly.interaction)
+
+AIC(m3, mlr.poly.interaction)
+BIC(m3, mlr.poly.interaction)
+
+median.asym <- median(abs(regr.data$mean.asymmetry))
+
+low.asym <- regr.data[abs(regr.data$mean.asymmetry)< median.asym,]
+high.asym <- regr.data[abs(regr.data$mean.asymmetry)> median.asym,]
+
+mean(high.asym$mds.distance)
+mean(low.asym$mds.distance)
+
+mean(high.asym$mean.similarity)
+mean(low.asym$mean.similarity)
+
+mean(high.asym$variance.similarity)
+mean(low.asym$variance.similarity)
+
+}
 
 ###################
 ###VISUALISATION###
 ###################
 
 #APPLY COLOUR FACTORS TO COLOURPAIRS DATAFRAME
-colourpairs$hex1 <- with(colourpairs, factor(hex1, levels = row.facs))
-colourpairs$hex2 <- with(colourpairs, factor(hex2, levels = row.facs))
+colourpairs$fhex1 <- with(colourpairs, factor(hex1, levels = row.facs))
+colourpairs$fhex2 <- with(colourpairs, factor(hex2, levels = row.facs))
+
+#creating one object with setting to ensure they all have the same, also only one thing to update
+matrix.plot.settings <- list(geom_raster(),
+                        theme_pubr(25),
+                        theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs)),
+                        theme(axis.text.y = element_text(size= 9, colour=row.facs)),
+                        theme(legend.position = "bottom", legend.key.size = unit(1.5,'cm')),
+                        scale_x_discrete(labels=block_rep), scale_y_discrete(labels=block_rep),
+                        labs(x= "Colour presented first", y= "Colour presented second"))
+
+#MATRIX PLOT OF HITS FOR COLOUR
+{
+  #heatmap of hitcount (the more a pair is tested, the 'hotter' it gets)
+  ggplot(colourpairs) +
+    aes(x = fhex1, y = fhex2, fill= pair_hitcount) +
+    matrix.plot.settings +
+    scale_fill_fermenter(palette = "Greys", direction = 1, name= "Times tested")
+  
+  #ggplot(colourpairs) + aes(x = hex1, y = hex2, fill= pair_hitcount) + geom_raster() +  theme_pubr()+  theme(axis.text.x=element_text(angle=90,hjust=1, size=7), axis.text.y = element_text(size = 7))
+  
+  #distribution of hitcounts
+  ggplot(colourpairs) +
+    aes(x= pair_hitcount) +
+    geom_bar(fill= "#016450") +
+    theme_pubr()+
+    labs(y='Frequency(number of pairs)', x='Times tested')
+}
 
 #VISUALISE MEAN SIMILARITY
 {
 #B&W 
 plot.similarity <- ggplot(colourpairs) +
-    aes(x = hex1, y = hex2, fill = mean.similarity) +
-    geom_raster() +
+    aes(x = fhex1, y = fhex2, fill = mean.similarity) +
     scale_fill_distiller(name= "Similarity",palette = "Greys", direction = 1,breaks= c(0,1,2,3,4,5,6,7))+
-    theme_pubr()+
-    theme(legend.position = "left")+
-    theme(axis.text.x= element_text(size= 7, angle=90, colour=row.facs))+
-    theme(axis.text.y = element_text(size= 7, colour=row.facs))+
-    scale_x_discrete(labels=block_rep) + scale_y_discrete(labels=block_rep) +
-    labs(x= "Colour presented first", y= "Colour presented second")
-  #    scale_fill_gradient(low= "grey", high= "black",breaks= c(0,1,2,3,4,5,6,7))+
-ggsave("mean similarity matrix.png",plot.similarity,height=15,width=17)
+    matrix.plot.settings 
+  
+ggsave("mean similarity matrix.png",plot.similarity,height=13,width=17)
+}
+
+#VISUALISE SIMILARITY VARIANCE
+{
+#B&W gradient
+plot.variance.sim <- ggplot(colourpairs) +
+    aes(x = fhex1, y = fhex2, fill = variance.similarity) +
+    scale_fill_distiller(name= "Variance",palette = "Greys", direction = 1)+
+    matrix.plot.settings 
+
+ggsave("variance similarity matrix.png",plot.variance.sim,height=13,width=17)
+
+#B&W binned/stepped 
+plot.variance.sim.bin <- ggplot(colourpairs) +
+  aes(x = fhex1, y = fhex2, fill = variance.similarity) +
+  scale_fill_fermenter(name= "Variance",palette = "Greys", direction = 1)+
+  matrix.plot.settings 
+
+ggsave("variance similarity matrix.bin.png",plot.variance.sim.bin,height=13,width=17)
 }
 
 #MAKE ASYMMETRY MATRIX ALL PARTICIPANTS -- To be refined
 {
 
-#plot with colour pairs CORRECT ONE TO USE 
-ggplot(colourpairs) +
-    aes(x = hex1, y = hex2, fill = mean.asymmetry) +
-    geom_raster() +
+#gradient colour scale  
+plot.gradient.asym <- ggplot(colourpairs) +
+    aes(x = fhex1, y = fhex2, fill = mean.asymmetry) +
     scale_fill_distiller(name= "Asymmetry", palette = "PiYG") +
-    theme_pubr()+
-    theme(legend.position = "left")+
-    scale_x_discrete(labels=block_rep) + scale_y_discrete(labels=block_rep) +
-    theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))+
-    theme(axis.text.y = element_text(size= 5, colour=row.facs))+
-    labs(x= "Colour presented first", y= "Colour presented second")
-#scale_fill_viridis_b(option = "plasma")
-#scale_fill_gradient2(low ="red", high= "blue", mid ="white", midpoint= 0, na.value = "green") 
+    matrix.plot.settings 
+
+ggsave("gradient asym matrix.png",plot.gradient.asym,height=17,width=17)
+
+#binned colour scale
+ggplot(colourpairs) +
+    aes(x = fhex1, y = fhex2, fill = mean.asymmetry) +
+    scale_fill_fermenter(breaks = c(-2,-1,1,2), name= "Asymmetry", palette = "PiYG") +
+    matrix.plot.settings   
+  
+    }
+
+#Visualise MDS distance in matrix 
+{mds.matrix <- ggplot(colourpairs) +
+    aes(x = hex1, y = hex2, fill = mds.distance) +
+    scale_fill_distiller(name= "MDS distance",palette = "Greys", direction = -1,breaks= c(0,1,2,3,4,5,6,7))+
+    matrix.plot.settings
+ggsave("mds.matrix.png",mds.matrix,height=17,width=17)
   }
 
 #FUNNEL PLOT Asymmetry x Hitcount
@@ -957,14 +1177,9 @@ ggplot(colourpairs)+
 
 #t-score matrix
 ggplot(colourpairs)+
-  aes(x = hex1, y = hex2, fill = t) +
-  geom_raster() +
+  aes(x = fhex1, y = fhex2, fill = t) +
   scale_fill_distiller(name= "t-score", palette = "PiYG") +
-  scale_x_discrete(labels=block_rep) + scale_y_discrete(labels=block_rep) +
-  theme_pubr()+
-  theme(legend.position = "left")+
-  theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))+
-  theme(axis.text.y = element_text(size= 5, colour=row.facs))
+  matrix.plot.settings
 
 #t-score x Variance zoomed in 
 ggplot(colourpairs) +
@@ -1013,8 +1228,6 @@ colourpairs$p.adjust <- p.adjust(colourpairs$p, method = "holm", n= length(colou
 
 #Candidate pairs
 candidates <- subset(colourpairs, colourpairs$t>4)
-
-candidates_data <- trialdata[]
 
 ggplot(trialdata) +
   aes(x = similarity, fill = participant) +
@@ -1066,36 +1279,41 @@ asym_percolour.df$average.asymmetry <-colMeans(asym.matrix.df) # add new variabl
 asym_percolour.df$color.names <- with(asym_percolour.df, factor(color.names, levels = row.facs)) #make colour variable as factor for graphing
 
 #calculate variance of each column
-asym_percolour.df$Variance <- colVars(asym.matrix)
+asym_percolour.df$Variance <- colVars(asym.matrix, na.rm = TRUE)
 
 #replace NAs with zero for graphing 
 asym_percolour.df[is.na(asym_percolour.df)] = 0
 
 #visualise average asymmetry per column 
-ggplot(asym_percolour.df)+
-  aes(x = color.names, y= average.asymmetry, fill= color.names)+
-  theme_pubr()+
+{avg.asym.percolumn <- ggplot(asym_percolour.df)+
+  aes(x = color.names, y= -average.asymmetry, fill= color.names)+
+  theme_pubr(25)+
   geom_col()+
   scale_x_discrete(labels=block_rep)+
   scale_fill_manual(values =c(row.facs))+
   guides(fill="none")+
   theme(axis.title.x=element_blank(),
         axis.ticks.x = element_blank(),
-        axis.text.x = element_blank())+ 
+        axis.text.x = element_blank(),
+        axis.line.x = element_blank())+ 
   geom_hline(aes(yintercept =0))+
-  labs(y= "Asymmetry average per column")
-
+  labs(y= "Asymmetry average per row")
+ggsave("avg.asym.percolumn.png",avg.asym.percolumn,height=7,width=17)  
+  }
 #visualise asymmetry variance per column 
-ggplot(asym_percolour.df)+
+{var.asym.perrow <- ggplot(asym_percolour.df)+
   aes(x = color.names, y= Variance, fill= color.names)+
-  theme_pubr()+
+  theme_pubr(20)+
   geom_col()+
   scale_x_discrete(labels=block_rep)+
   scale_fill_manual(values =c(row.facs))+
   guides(fill="none")+
-  theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))+
+  theme(axis.title.x=element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.x= element_blank())+
   labs(y= "Asymmetry variance")
-
+ggsave("var.asym.perrow.png",var.asym.perrow,height=4,width=17)
+  }
 #Calculating rough tscore with population equal to 92 colours 
 asym_percolour.df$t <- NA
 asym_percolour.df$t <- asym_percolour.df$average.asymmetry/(sqrt(asym_percolour.df$Variance)/sqrt(92))
@@ -1103,7 +1321,7 @@ asym_percolour.df$t <- asym_percolour.df$average.asymmetry/(sqrt(asym_percolour.
 asym_percolour.df[is.na(asym_percolour.df)] = 0 #for graphing
 
 #visualise asymmetry tscore per column 
-ggplot(asym_percolour.df)+
+{ggplot(asym_percolour.df)+
   aes(x = color.names, y= t, fill= color.names)+
   theme_pubr()+
   geom_col()+
@@ -1111,51 +1329,195 @@ ggplot(asym_percolour.df)+
   scale_fill_manual(values =c(row.facs))+
   guides(fill="none")+
   theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))
-
+}
 #Isolating one colour for further analysis
-single.colour.df <- colourpairs[colourpairs$hex1=="#40A144",] #subsetting
+green.df <- colourpairs[colourpairs$hex1=="#40A144",] #subsetting
 mean(single.colour.df$mean.asymmetry) #calculating mean for sanity check 
 var(single.colour.df$mean.asymmetry) #caculating variance for sanity check 
 mean(single.colour.df$mean.asymmetry)/(sqrt(var(single.colour.df$mean.asymmetry))/sqrt(92)) #calculating tscore for sanity check 
 
-single.colour.df <- as.data.frame(single.colour.df)
-single.colour.df$hex2 <- with(single.colour.df, factor(hex2, levels = row.facs)) #make colour variable as factor for graphing
+green.df <- as.data.frame(green.df)
+green.df$hex2 <- with(green.df, factor(hex2, levels = row.facs)) #make colour variable as factor for graphing
 
 #distribution of asymmetry values for one colour
-ggplot(single.colour.df)+
+{ggplot(green.df)+
   aes(mean.asymmetry)+
-  geom_histogram(fill= unique(single.colour.df$hex1))+ #make colour of histogram the colour plotted
-  scale_x_continuous(breaks = as.numeric(round(quantile(single.colour.df$mean.asymmetry),digits = 2)))+ #change axis to display quantile value instead of arbitrary values
-  labs(x = paste(unique(single.colour.df$hex1)), y = "Frequency")+
-  theme_pubr()+
-  theme(axis.text.x = element_text(angle = 45)) #angle the text to make easier to read, not yet working
-
+  geom_histogram(fill= unique(green.df$hex1))+ #make colour of histogram the colour plotted
+  scale_x_continuous(breaks = as.numeric(round(quantile(green.df$mean.asymmetry),digits = 2)))+ #change axis to display quantile value instead of arbitrary values
+  labs(x = paste(unique(green.df$hex1)), y = "Frequency")+
+  theme_pubr(20)
+  
+}
 #Visualisation of asymmetry index for one colour only against all other colours to see impact of hitcount
-ggplot(single.colour.df) +
+{ggplot(green.df) +
   aes(x = hex2, fill = pair_hitcount, y = mean.asymmetry) +
   geom_col() +
   scale_fill_distiller(palette = "PuBuGn", direction = 1) +
   labs(
     x = "Colour compared to",
     y = "Asymmetry Index (averaged across participants)",
-    title = paste("Asymmetries of ", unique(single.colour.df$hex1), sep = ""),
+    title = paste("Asymmetries of ", unique(green.df$hex1), sep = ""),
     fill = "Number of participants") +
   theme_pubr()+
   scale_x_discrete(labels=block_rep)+
-  theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))
-
+  theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
+}
 #Visualisation of asymmetry index for one colour only against all other colours to see impact of SEM
-ggplot(single.colour.df) +
+{ggplot(green.df) +
   aes(x = hex2, fill = sem.asymmetry, y = mean.asymmetry) +
   geom_col() +
   scale_fill_distiller(palette = "PuBuGn", direction = -1) +
   labs(
     x = "Colour compared to",
     y = "Asymmetry Index (averaged across participants)",
-    title = paste("Asymmetries of ", unique(single.colour.df$hex1), sep = ""),
+    title = paste("Asymmetries of ", unique(green.df$hex1), sep = ""),
     fill = "SEM asymmetry") +
   theme_pubr()+
   scale_x_discrete(labels=block_rep)+
-  theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))
+  theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
+}
 
 
+###RED###
+#Isolating one colour for further analysis
+red.df <- colourpairs[colourpairs$hex1=="#DA0B27",] #subsetting
+mean(red.df$mean.asymmetry) #calculating mean for sanity check 
+var(red.df$mean.asymmetry) #caculating variance for sanity check 
+mean(red.df$mean.asymmetry)/(sqrt(var(red.df$mean.asymmetry))/sqrt(92)) #calculating tscore for sanity check 
+
+red.df <- as.data.frame(red.df)
+red.df$hex2 <- with(red.df, factor(hex2, levels = row.facs)) #make colour variable as factor for graphing
+
+#distribution of asymmetry values for one colour
+{ggplot(red.df)+
+    aes(mean.asymmetry)+
+    geom_histogram(fill= unique(red.df$hex1))+ #make colour of histogram the colour plotted
+    scale_x_continuous(breaks = as.numeric(round(quantile(red.df$mean.asymmetry),digits = 2)))+ #change axis to display quantile value instead of arbitrary values
+    labs(x = paste(unique(red.df$hex1)), y = "Frequency")+
+    theme_pubr(20)
+  
+}
+#Visualisation of asymmetry index for one colour only against all other colours to see impact of hitcount
+{ggplot(red.df) +
+    aes(x = hex2, fill = pair_hitcount, y = mean.asymmetry) +
+    geom_col() +
+    scale_fill_distiller(palette = "PuBuGn", direction = 1) +
+    labs(
+      x = "Colour compared to",
+      y = "Asymmetry Index (averaged across participants)",
+      title = paste("Asymmetries of ", unique(red.df$hex1), sep = ""),
+      fill = "Number of participants") +
+    theme_pubr(20)+
+    scale_x_discrete(labels=block_rep)+
+    theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
+}
+#Visualisation of asymmetry index for one colour only against all other colours to see impact of SEM
+{ggplot(red.df) +
+    aes(x = hex2, fill = sem.asymmetry, y = mean.asymmetry) +
+    geom_col() +
+    scale_fill_distiller(palette = "PuBuGn", direction = -1) +
+    labs(
+      x = "Colour compared to",
+      y = "Asymmetry Index (averaged across participants)",
+      title = paste("Asymmetries of ", unique(red.df$hex1), sep = ""),
+      fill = "SEM asymmetry") +
+    theme_pubr(20)+
+    scale_x_discrete(labels=block_rep)+
+    theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
+}
+
+###YELLOW###
+#Isolating one colour for further analysis
+yellow.df <- colourpairs[colourpairs$hex1=="#F4D000",] #subsetting
+mean(yellow.df$mean.asymmetry) #calculating mean for sanity check 
+var(yellow.df$mean.asymmetry) #caculating variance for sanity check 
+mean(yellow.df$mean.asymmetry)/(sqrt(var(yellow.df$mean.asymmetry))/sqrt(92)) #calculating tscore for sanity check 
+
+yellow.df <- as.data.frame(yellow.df)
+yellow.df$hex2 <- with(yellow.df, factor(hex2, levels = row.facs)) #make colour variable as factor for graphing
+
+#distribution of asymmetry values for one colour
+{ggplot(yellow.df)+
+    aes(mean.asymmetry)+
+    geom_histogram(fill= unique(yellow.df$hex1))+ #make colour of histogram the colour plotted
+    scale_x_continuous(breaks = as.numeric(round(quantile(yellow.df$mean.asymmetry),digits = 2)))+ #change axis to display quantile value instead of arbitrary values
+    labs(x = paste(unique(yellow.df$hex1)), y = "Frequency")+
+    theme_pubr(20)
+  
+}
+#Visualisation of asymmetry index for one colour only against all other colours to see impact of hitcount
+{ggplot(yellow.df) +
+    aes(x = hex2, fill = pair_hitcount, y = mean.asymmetry) +
+    geom_col() +
+    scale_fill_distiller(palette = "PuBuGn", direction = 1) +
+    labs(
+      x = "Colour compared to",
+      y = "Asymmetry Index (averaged across participants)",
+      title = paste("Asymmetries of ", unique(yellow.df$hex1), sep = ""),
+      fill = "Number of participants") +
+    theme_pubr(20)+
+    scale_x_discrete(labels=block_rep)+
+    theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
+}
+#Visualisation of asymmetry index for one colour only against all other colours to see impact of SEM
+{ggplot(yellow.df) +
+    aes(x = hex2, fill = sem.asymmetry, y = mean.asymmetry) +
+    geom_col() +
+    scale_fill_distiller(palette = "PuBuGn", direction = -1) +
+    labs(
+      x = "Colour compared to",
+      y = "Asymmetry Index (averaged across participants)",
+      title = paste("Asymmetries of ", unique(yellow.df$hex1), sep = ""),
+      fill = "SEM asymmetry") +
+    theme_pubr(20)+
+    scale_x_discrete(labels=block_rep)+
+    theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
+}
+
+###BLUE###
+#Isolating one colour for further analysis
+blue.df <- colourpairs[colourpairs$hex1=="#02529A",] #subsetting
+mean(blue.df$mean.asymmetry) #calculating mean for sanity check 
+var(blue.df$mean.asymmetry) #caculating variance for sanity check 
+mean(blue.df$mean.asymmetry)/(sqrt(var(blue.df$mean.asymmetry))/sqrt(92)) #calculating tscore for sanity check 
+
+blue.df <- as.data.frame(blue.df)
+blue.df$hex2 <- with(blue.df, factor(hex2, levels = row.facs)) #make colour variable as factor for graphing
+
+#distribution of asymmetry values for one colour
+{blue.dist <- ggplot(blue.df)+
+    aes(mean.asymmetry)+
+    geom_histogram(fill= unique(blue.df$hex1))+ #make colour of histogram the colour plotted
+    scale_x_continuous(breaks = as.numeric(round(quantile(blue.df$mean.asymmetry),digits = 2)))+ #change axis to display quantile value instead of arbitrary values
+    labs(x = paste(unique(blue.df$hex1)), y = "Frequency")+
+    theme_pubr(20)
+ggsave("blue.dist.png",blue.dist,height=4,width=17)   
+}
+#Visualisation of asymmetry index for one colour only against all other colours to see impact of hitcount
+{ggplot(blue.df) +
+    aes(x = hex2, fill = pair_hitcount, y = mean.asymmetry) +
+    geom_col() +
+    scale_fill_distiller(palette = "PuBuGn", direction = 1) +
+    labs(
+      x = "Colour compared to",
+      y = "Asymmetry Index (averaged across participants)",
+      title = paste("Asymmetries of ", unique(blue.df$hex1), sep = ""),
+      fill = "Number of participants") +
+    theme_pubr(20)+
+    scale_x_discrete(labels=block_rep)+
+    theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
+}
+#Visualisation of asymmetry index for one colour only against all other colours to see impact of SEM
+{ggplot(blue.df) +
+    aes(x = hex2, fill = sem.asymmetry, y = mean.asymmetry) +
+    geom_col() +
+    scale_fill_distiller(palette = "PuBuGn", direction = -1) +
+    labs(
+      x = "Colour compared to",
+      y = "Asymmetry Index (averaged across participants)",
+      title = paste("Asymmetries of ", unique(blue.df$hex1), sep = ""),
+      fill = "SEM asymmetry") +
+    theme_pubr(20)+
+    scale_x_discrete(labels=block_rep)+
+    theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
+}

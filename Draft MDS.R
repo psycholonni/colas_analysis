@@ -1,25 +1,14 @@
 #RESCALING THE DATA TO DISSIMILARITY
-{ trialdata$similarity[trialdata$similarity == -4] <- 7
-  trialdata$similarity[trialdata$similarity == -3] <- 6
-  trialdata$similarity[trialdata$similarity == -2] <- 5
-  trialdata$similarity[trialdata$similarity == -1] <- 4
-  trialdata$similarity[trialdata$similarity == 1] <-3
-  trialdata$similarity[trialdata$similarity == 2] <-2
-  trialdata$similarity[trialdata$similarity == 3] <-1
-  trialdata$similarity[trialdata$similarity == 4] <-0
+{ trialdata$dissimilarity[trialdata$similarity == -4] <- 7
+  trialdata$dissimilarity[trialdata$similarity == -3] <- 6
+  trialdata$dissimilarity[trialdata$similarity == -2] <- 5
+  trialdata$dissimilarity[trialdata$similarity == -1] <- 4
+  trialdata$dissimilarity[trialdata$similarity == 1] <-3
+  trialdata$dissimilarity[trialdata$similarity == 2] <-2
+  trialdata$dissimilarity[trialdata$similarity == 3] <-1
+  trialdata$dissimilarity[trialdata$similarity == 4] <-0
+}  
   
-  
-
-
-get_mean_similarity <- function(z){ 
-    a<-subset(trialdata_passes, pairofcolour==z) #similarity with exact hex match
-    mean<-mean(a$similarity)
-    return(mean)
-  }
-colourpairs$mean.similarity<-lapply(colourpairs$pair, get_mean_similarity) 
-colourpairs$mean.similarity<- as.numeric(colourpairs$mean.similarity)
-
-
 colourpairs$pair.reversed <- str_c(colourpairs$hex2, '',colourpairs$hex1)
 
 get_mean.sim <- function(z){ 
@@ -34,35 +23,35 @@ get_mean.sim <- function(z){
 
 colourpairs$mean.sim<-lapply(colourpairs$pair, get_mean.sim) 
 colourpairs$mean.sim<- as.numeric(colourpairs$mean.sim)
-colourpairs$mean.sim <- 7- colourpairs$mean.sim
-
-}
+colourpairs$mean.dissim <- 7- colourpairs$mean.sim
 
 
-## Make a similarity matrix
+
+
+## Make a dissimilarity matrix
 # Create blank matrix 
-sim.matrix <- matrix(3.5, ncol = 93, nrow = 93)
+dissim.matrix <- matrix(3.5, ncol = 93, nrow = 93)
 # setting all give colours as both row and column names
-colnames(sim.matrix) <- rownames(sim.matrix) <- unique(trialdata$hex1)
+colnames(dissim.matrix) <- rownames(dissim.matrix) <- unique(trialdata$hex1)
 
 # fill matrix with similarity values
 matrix.df.fill <- function(data,matrix.df){
   for(i in 1:nrow(data)){
     row <- data[i,]
-    matrix.df[row$hex1,row$hex2] <- row$mean.sim
+    matrix.df[row$hex1,row$hex2] <- row$mean.dissim
   }
   return(matrix.df)
 }
 
-sim.data_vars <- c("hex1", "hex2", "mean.sim")
-sim.data <- colourpairs[sim.data_vars]
-sim.data$mean.sim <- as.numeric(sim.data$mean.sim)
+dissim.data_vars <- c("hex1", "hex2", "mean.dissim")
+dissim.data <- colourpairs[dissim.data_vars]
+dissim.data$mean.dissim <- as.numeric(dissim.data$mean.dissim)
 
-sim.matrix <- matrix.df.fill(sim.data,sim.matrix)
-sim.matrix.df <- as.data.frame(sim.matrix)
+dissim.matrix <- matrix.df.fill(dissim.data,dissim.matrix)
+dissim.matrix.df <- as.data.frame(dissim.matrix)
 
 #MDS 2d
-{fit <- cmdscale(sim.matrix.df, eig= TRUE, k =2)
+{fit <- cmdscale(dissim.matrix.df, eig= TRUE, k =2)
 x <- fit$points[, 1]
 y <- fit$points[, 2]
 
@@ -79,12 +68,12 @@ plot(x, y)
 }
 
 #3d plot
-fit <- cmdscale(sim.matrix.df, eig= TRUE, k =3)
+fit <- cmdscale(dissim.matrix.df, eig= TRUE, k =3)
 x <- fit$points[, 1]
 y <- fit$points[, 2]
 z <- fit$points[, 3]
 
-colors <- colnames(sim.matrix)
+colors <- colnames(dissim.matrix)
 
 plot3d(x,y,z, col=colors, size = 15)
 
@@ -95,34 +84,7 @@ mds_coord$x <- x
 mds_coord$y <- y
 mds_coord$z <- z
 
-# Create blank matrix 
-mds.matrix <- matrix(3.5, ncol = 93, nrow = 93)
-# setting all give colours as both row and column names
-colnames(sim.matrix) <- rownames(sim.matrix) <- unique(trialdata$hex1)
-
-# fill matrix with similarity values
-mds.matrix.df.fill <- function(data,matrix.df){
-  for(i in 1:nrow(data)){
-    row <- data[i,]
-    matrix.df[row$hex1,row$hex2] <- row$mean.sim
-  }
-  return(matrix.df)
-}
-
-mds.data_vars <- c("hex1", "hex2", "mds.dist")
-mds.data <- colourpairs[sim.data_vars]
-sim.data$mean.sim <- as.numeric(sim.data$mean.sim)
-
-mds.matrix <- mds.matrix.df.fill(mds_coord,mds.matrix)
-mds.matrix.df <- as.data.frame(sim.matrix)
-
-for (x in 1:nrow(colourpairs)) {#  #makes a temporary dataframe with all the similarity ratings for one colourpair (x = row in mean_similarity ie. one per colourpair)
-  a<-subset(mds_coord,trialdata_passes$hex1==colourpairs$hex1[x] & trialdata_passes$hex2==colourpairs$hex2[x], c(x, y, z)) #coord colour 1
-  b<-subset(trialdata_passes,trialdata_passes$hex1==colourpairs$hex2[x] & trialdata_passes$hex2==colourpairs$hex1[x], c(x, y, z)) #coord colour 2
-  c<-rbind(a, b) #all similarty ratings for colour pair x
-  colourpairs$mdsdistance[x]<- sqrt((a$x-b$x)^2+(a$y-b$y)^2+(a$z-b$z)^2)
-}
-
+#calculate distance in MDS 3d 
 get_mds.distance <- function(c1,c2){ 
     a <-subset(mds_coord, colors == c1) #coord colour 1
     b <-subset(mds_coord, colors == c2) #coord colour 2
@@ -132,7 +94,7 @@ get_mds.distance <- function(c1,c2){
 colourpairs$mds.distance <- apply(colourpairs,1, function(x) get_mds.distance(x[1], x[2])) #apply function
 colourpairs$mds.distance<- as.numeric(colourpairs$mds.distance) #make it numeric
 
-
+#Visualise MDS distance in matrix 
 ggplot(colourpairs) +
   aes(x = hex1, y = hex2, fill = mds.distance) +
   geom_raster() +
@@ -222,5 +184,30 @@ plot(md5, ncol=2 , ask= FALSE)
 #4th vs 5th dimension comparison
 AIC(m4, m5)
 BIC(m4, m5)
+
+
+mlr <- lm(abs(mean.asymmetry)~ poly(mds.distance,4) + mean.similarity + variance.similarity, 
+   data = colourpairs)
+summary(mlr)
+
+mlr <- lm(abs(mean.asymmetry)~ poly(mds.distance,1) + mean.similarity + variance.similarity, 
+          data = colourpairs)
+summary(mlr)
+
+mlr.interaction <- lm(abs(mean.asymmetry)~ mds.distance + mean.similarity + variance.similarity+
+                        mds.distance*mean.similarity*variance.similarity, 
+                        data = colourpairs)
+summary(mlr.interaction)
+
+mlr.poly.interaction <- lm(abs(mean.asymmetry)~ poly(mds.distance,4) + mean.similarity + variance.similarity+
+                        poly(mds.distance,4)*mean.similarity*variance.similarity, 
+                      data = colourpairs)
+summary(mlr.poly.interaction)
+
+AIC(mlr.interaction, mlr.poly.interaction)
+BIC(mlr.interaction, mlr.poly.interaction)
+
+AIC(m4, mlr.poly.interaction)
+BIC(m4, mlr.poly.interaction)
 
 lmer(abs(mean.asymmetry) ~ poly(mds.distance, 2), data = colourpairs, REML = FALSE)
