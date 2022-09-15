@@ -594,6 +594,8 @@ colourpairs$mean.similarity<- as.numeric(colourpairs$mean.similarity)
   colourpairs$variance.similarity<- as.numeric(colourpairs$variance.similarity)
 }
 
+#NOT IN USE 
+{
 #DO NOT USE -- FACTORS SET AT TOP OF SCRIPT-- MAKING COLOURS AS FACTORS FOR GRAPHING
 {# Create blank matrix 
 color.mat.df <- matrix(NA, ncol = 93, nrow = 93)
@@ -676,7 +678,6 @@ for (x in 1:nrow(median_similarity)) {  #makes a temporary dataframe with all th
     theme(axis.text.x= element_text(size= 7, angle=90, colour=sort(unique(median_similarity$hex1))))+
     theme(axis.text.y = element_text(size= 7, colour=sort(unique(median_similarity$hex2))))
 }
-
 #MAKE DATAFRAME WITH MEAN VARIANCE PER COLOUR PAIR (AB==BA) - Not in Use
 {
 mean_variance<-colourpairs
@@ -737,6 +738,7 @@ AsIndata_wide$AsIn13 <- (AsIndata_wide$mean13 - AsIndata_wide$mean24)/
 AsIndata_wide$AsIn24 <- (AsIndata_wide$mean24 - AsIndata_wide$mean13)/
   ((AsIndata_wide$abs.first + AsIndata_wide$abs.second) + 1)
 }
+}
 
 #MAKE DATAFRAME WITH ASYMMETRY INDEX (AsIn) for each participant SIMPLIFIED FORMULA 
 {
@@ -786,7 +788,7 @@ colourpairs$mean.asymmetry<-lapply(colourpairs$pair, get_mean_asymmetry) #apply 
 colourpairs$mean.asymmetry<- as.numeric(colourpairs$mean.asymmetry) #make it numeric
 }
 
-#GET AsIn variance 
+#GET AsIn Variance in Colourpairs DATAFRAME
 {get_var_asymmetry <- function(z) {  #makes a temporary dataframe with all the similarity ratings for one colourpair (x = row in mean_similarity ie. one per colourpair)
   a<-subset(AsIndata_wide, pair13==z) #getting all the instance in pair13 matching the pair of hexcodes
   a<- a["AsIn13"] #only keeping the asymmetry score of interest 
@@ -876,7 +878,7 @@ colourpairs$mean.sim<-lapply(colourpairs$pair, get_mean.sim)
 colourpairs$mean.sim<- as.numeric(colourpairs$mean.sim)
 colourpairs$mean.dissim <- 7- colourpairs$mean.sim
 }
-## MAKE DISSIMILARITY MATRIX 
+##MAKE DISSIMILARITY MATRIX 
 {# Create blank matrix 
 dissim.matrix <- matrix(3.5, ncol = 93, nrow = 93)
 # setting all give colours as both row and column names
@@ -956,7 +958,7 @@ regr.data <- colourpairs[colourpairs$diagonal==FALSE,]
 m1 <- lm(abs(mean.asymmetry)~ mds.distance, 
          data= regr.data)
 summary(m1)
-
+lm.beta(m1)
 md <- modelDiagnostics(m1, ev.perc=.005)
 plot(md, ncol=2 , ask= FALSE)
 
@@ -1010,7 +1012,7 @@ summary(mlr)
 mlr <- lm(abs(mean.asymmetry)~ poly(mds.distance,1) + mean.similarity + variance.similarity, 
           data = regr.data)
 summary(mlr)
-
+lm.beta(mlr)
 #Adding interaction term
 mlr.interaction <- lm(abs(mean.asymmetry)~ mds.distance + mean.similarity + variance.similarity+
                         mds.distance*mean.similarity*variance.similarity, 
@@ -1330,6 +1332,9 @@ asym_percolour.df[is.na(asym_percolour.df)] = 0 #for graphing
   guides(fill="none")+
   theme(axis.text.x= element_text(size= 5, angle=90, colour=row.facs))
 }
+
+
+##GREEN
 #Isolating one colour for further analysis
 green.df <- colourpairs[colourpairs$hex1=="#40A144",] #subsetting
 mean(single.colour.df$mean.asymmetry) #calculating mean for sanity check 
@@ -1340,13 +1345,14 @@ green.df <- as.data.frame(green.df)
 green.df$hex2 <- with(green.df, factor(hex2, levels = row.facs)) #make colour variable as factor for graphing
 
 #distribution of asymmetry values for one colour
-{ggplot(green.df)+
+{green.dist <- ggplot(green.df)+
   aes(mean.asymmetry)+
   geom_histogram(fill= unique(green.df$hex1))+ #make colour of histogram the colour plotted
   scale_x_continuous(breaks = as.numeric(round(quantile(green.df$mean.asymmetry),digits = 2)))+ #change axis to display quantile value instead of arbitrary values
   labs(x = paste(unique(green.df$hex1)), y = "Frequency")+
-  theme_pubr(20)
-  
+  theme_pubr(20)+
+    ylim(0,12)
+  ggsave("green.dist.png",green.dist,height=4,width=17)
 }
 #Visualisation of asymmetry index for one colour only against all other colours to see impact of hitcount
 {ggplot(green.df) +
@@ -1363,7 +1369,7 @@ green.df$hex2 <- with(green.df, factor(hex2, levels = row.facs)) #make colour va
   theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
 }
 #Visualisation of asymmetry index for one colour only against all other colours to see impact of SEM
-{ggplot(green.df) +
+{green.bar <- ggplot(green.df) +
   aes(x = hex2, fill = sem.asymmetry, y = mean.asymmetry) +
   geom_col() +
   scale_fill_distiller(palette = "PuBuGn", direction = -1) +
@@ -1372,9 +1378,11 @@ green.df$hex2 <- with(green.df, factor(hex2, levels = row.facs)) #make colour va
     y = "Asymmetry Index (averaged across participants)",
     title = paste("Asymmetries of ", unique(green.df$hex1), sep = ""),
     fill = "SEM asymmetry") +
-  theme_pubr()+
+  theme_pubr(15)+
   scale_x_discrete(labels=block_rep)+
-  theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
+  theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs),
+        legend.key.size = unit(1, "cm"))
+  ggsave("green.bar.png", green.bar, height = 7, width = 17)
 }
 
 
@@ -1389,12 +1397,14 @@ red.df <- as.data.frame(red.df)
 red.df$hex2 <- with(red.df, factor(hex2, levels = row.facs)) #make colour variable as factor for graphing
 
 #distribution of asymmetry values for one colour
-{ggplot(red.df)+
+{red.dist <- ggplot(red.df)+
     aes(mean.asymmetry)+
     geom_histogram(fill= unique(red.df$hex1))+ #make colour of histogram the colour plotted
     scale_x_continuous(breaks = as.numeric(round(quantile(red.df$mean.asymmetry),digits = 2)))+ #change axis to display quantile value instead of arbitrary values
     labs(x = paste(unique(red.df$hex1)), y = "Frequency")+
-    theme_pubr(20)
+    theme_pubr(20)+
+    ylim(0,12)
+  ggsave("red.dist.png",red.dist,height=4,width=17)
   
 }
 #Visualisation of asymmetry index for one colour only against all other colours to see impact of hitcount
@@ -1412,7 +1422,7 @@ red.df$hex2 <- with(red.df, factor(hex2, levels = row.facs)) #make colour variab
     theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
 }
 #Visualisation of asymmetry index for one colour only against all other colours to see impact of SEM
-{ggplot(red.df) +
+{red.bar <- ggplot(red.df) +
     aes(x = hex2, fill = sem.asymmetry, y = mean.asymmetry) +
     geom_col() +
     scale_fill_distiller(palette = "PuBuGn", direction = -1) +
@@ -1421,9 +1431,11 @@ red.df$hex2 <- with(red.df, factor(hex2, levels = row.facs)) #make colour variab
       y = "Asymmetry Index (averaged across participants)",
       title = paste("Asymmetries of ", unique(red.df$hex1), sep = ""),
       fill = "SEM asymmetry") +
-    theme_pubr(20)+
+    theme_pubr(15)+
     scale_x_discrete(labels=block_rep)+
-    theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
+    theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs),
+          legend.key.size = unit(1, "cm"))
+  ggsave("red.bar.png", red.bar, height = 7, width = 17)
 }
 
 ###YELLOW###
@@ -1437,12 +1449,14 @@ yellow.df <- as.data.frame(yellow.df)
 yellow.df$hex2 <- with(yellow.df, factor(hex2, levels = row.facs)) #make colour variable as factor for graphing
 
 #distribution of asymmetry values for one colour
-{ggplot(yellow.df)+
+{yellow.dist <- ggplot(yellow.df)+
     aes(mean.asymmetry)+
     geom_histogram(fill= unique(yellow.df$hex1))+ #make colour of histogram the colour plotted
     scale_x_continuous(breaks = as.numeric(round(quantile(yellow.df$mean.asymmetry),digits = 2)))+ #change axis to display quantile value instead of arbitrary values
     labs(x = paste(unique(yellow.df$hex1)), y = "Frequency")+
-    theme_pubr(20)
+    theme_pubr(20)+
+    ylim(0,12)
+  ggsave("yellow.dist.png", yellow.dist, height=4,width=17)
   
 }
 #Visualisation of asymmetry index for one colour only against all other colours to see impact of hitcount
@@ -1460,7 +1474,7 @@ yellow.df$hex2 <- with(yellow.df, factor(hex2, levels = row.facs)) #make colour 
     theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
 }
 #Visualisation of asymmetry index for one colour only against all other colours to see impact of SEM
-{ggplot(yellow.df) +
+{yellow.bar <-ggplot(yellow.df) +
     aes(x = hex2, fill = sem.asymmetry, y = mean.asymmetry) +
     geom_col() +
     scale_fill_distiller(palette = "PuBuGn", direction = -1) +
@@ -1469,9 +1483,11 @@ yellow.df$hex2 <- with(yellow.df, factor(hex2, levels = row.facs)) #make colour 
       y = "Asymmetry Index (averaged across participants)",
       title = paste("Asymmetries of ", unique(yellow.df$hex1), sep = ""),
       fill = "SEM asymmetry") +
-    theme_pubr(20)+
+    theme_pubr(15)+
     scale_x_discrete(labels=block_rep)+
-    theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
+    theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs),
+          legend.key.size = unit(1, "cm"))
+  ggsave("yellow.bar.png", yellow.bar, height = 7, width = 17)
 }
 
 ###BLUE###
@@ -1508,7 +1524,7 @@ ggsave("blue.dist.png",blue.dist,height=4,width=17)
     theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
 }
 #Visualisation of asymmetry index for one colour only against all other colours to see impact of SEM
-{ggplot(blue.df) +
+{blue.bar <- ggplot(blue.df) +
     aes(x = hex2, fill = sem.asymmetry, y = mean.asymmetry) +
     geom_col() +
     scale_fill_distiller(palette = "PuBuGn", direction = -1) +
@@ -1517,7 +1533,9 @@ ggsave("blue.dist.png",blue.dist,height=4,width=17)
       y = "Asymmetry Index (averaged across participants)",
       title = paste("Asymmetries of ", unique(blue.df$hex1), sep = ""),
       fill = "SEM asymmetry") +
-    theme_pubr(20)+
+    theme_pubr(15)+
     scale_x_discrete(labels=block_rep)+
-    theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs))
+    theme(axis.text.x= element_text(size= 9, angle=90, colour=row.facs),
+          legend.key.size = unit(1, "cm"))
+  ggsave("blue.bar.png", blue.bar, height = 7, width = 17)
 }
