@@ -174,7 +174,7 @@ BIC(m3,m4)
 visreg(m4, xvar= "mds.distance", gg= TRUE)+
   theme_pubr()
 
-#5th dimension model
+#quintic model
 m5 <- lm(abs(mean.asymmetry)~ poly(mds.distance,5), 
          data= colourpairs)
 summary(m5)
@@ -210,4 +210,5 @@ BIC(mlr.interaction, mlr.poly.interaction)
 AIC(m4, mlr.poly.interaction)
 BIC(m4, mlr.poly.interaction)
 
-lmer(abs(mean.asymmetry) ~ poly(mds.distance, 2), data = colourpairs, REML = FALSE)
+test <-lmer(abs(firstpass_similarity-secondpass_similarity) ~ similarity + (1|pairofcolour), data = trialdata_passes, REML = TRUE)
+plot(modelDiagnostics(test))
